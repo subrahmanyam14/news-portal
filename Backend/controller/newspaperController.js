@@ -2,24 +2,29 @@ const express = require('express');
 const multer = require('multer');
 const { PDFDocument } = require('pdf-lib');
 const poppler = require('pdf-poppler');
+const sharp = require('sharp');
 const fs = require('fs');
 const path = require('path');
 const { promisify } = require('util');
 const cloudinary = require('../cloudinary/config');
 const NewPaperModel = require('../model/NewPaper');
 
+// Promisify file system functions
 const unlink = promisify(fs.unlink);
 const rm = promisify(fs.rm);
 const mkdir = promisify(fs.mkdir);
 
+// Configure temp directories
 const TEMP_DIR = path.join(__dirname, '..', 'temp');
 const PAGES_DIR = path.join(TEMP_DIR, 'pages');
 
+// Ensure temp directories exist
 const ensureDirsExist = async () => {
   if (!fs.existsSync(TEMP_DIR)) await mkdir(TEMP_DIR, { recursive: true });
   if (!fs.existsSync(PAGES_DIR)) await mkdir(PAGES_DIR, { recursive: true });
 };
 
+// Configure multer for PDF uploads
 const storage = multer.diskStorage({
   destination: async (req, file, cb) => {
     try {
@@ -37,13 +42,14 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 100 * 1024 * 1024 }, 
+  limits: { fileSize: 100 * 1024 * 1024 }, // Increased to 100MB
   fileFilter: (req, file, cb) => {
     if (file.mimetype === 'application/pdf') cb(null, true);
     else cb(new Error('Only PDF files are allowed'), false);
   }
 });
 
+// Validate PDF
 const validatePDF = async (pdfPath) => {
   try {
     const pdfBytes = fs.readFileSync(pdfPath);
@@ -58,7 +64,7 @@ const validatePDF = async (pdfPath) => {
   }
 };
 
-// Convert PDF to Lossless PNG Images
+// Convert PDF to Ultra-HD Images
 const convertPDFToImages = async (pdfPath, outputDir) => {
   try {
     if (!fs.existsSync(outputDir)) await mkdir(outputDir, { recursive: true });
@@ -67,7 +73,7 @@ const convertPDFToImages = async (pdfPath, outputDir) => {
       format: 'png', 
       out_dir: outputDir,
       out_prefix: 'page',
-      scale: 1200 // Keep ultra-HD resolution
+      scale: 1200 // MAX DPI for crystal-clear images
     };
 
     await poppler.convert(pdfPath, options);
@@ -83,7 +89,26 @@ const convertPDFToImages = async (pdfPath, outputDir) => {
   }
 };
 
-// Upload Images to Cloudinary with Max Quality
+// Optimize Images WITHOUT Losing Quality
+const optimizeImages = async (imagePaths) => {
+  const optimizedPaths = [];
+
+  for (const imagePath of imagePaths) {
+    const optimizedPath = imagePath.replace('.png', '_optimized.png');
+
+    await sharp(imagePath)
+      .png({ compressionLevel: 0 }) // No compression = 100% quality
+      .toFile(optimizedPath);
+
+    await unlink(imagePath); // Remove original file
+    fs.renameSync(optimizedPath, imagePath); // Rename optimized file
+    optimizedPaths.push(imagePath);
+  }
+
+  return optimizedPaths;
+};
+
+// Upload Images to Cloudinary (100% Quality)
 const uploadToCloudinary = async (imagePaths) => {
   const urls = [];
   const MAX_RETRIES = 3;
@@ -96,10 +121,9 @@ const uploadToCloudinary = async (imagePaths) => {
       try {
         const result = await cloudinary.uploader.upload(imagePath, {
           folder: 'newspapers',
-          format: 'png', // Keep lossless format
-          quality: '100', // 100% quality, no compression
-          flags: 'lossless', // Ensure no loss in clarity
-          timeout: 180000
+          quality: 100, // MAX quality
+          format: 'png', // Lossless PNG format
+          timeout: 180000 // 3 min timeout
         });
 
         urls.push(result.secure_url);
@@ -112,7 +136,7 @@ const uploadToCloudinary = async (imagePaths) => {
       }
     }
 
-    await unlink(imagePath);
+    await unlink(imagePath); // Cleanup local file
   }
 
   return urls;
@@ -135,12 +159,16 @@ const uploadNewspaper = async (req, res) => {
     let publicationDate = req.body.publicationDate || new Date();
     if (typeof publicationDate === 'string') publicationDate = new Date(publicationDate);
 
-    console.log('Converting PDF to lossless PNG images...');
+    console.log('Converting PDF to images...');
     const imagePaths = await convertPDFToImages(pdfPath, PAGES_DIR);
     console.log(`Generated ${imagePaths.length} ultra-HD images from PDF`);
 
-    console.log('Uploading images to Cloudinary (100% Quality)...');
-    const imageUrls = await uploadToCloudinary(imagePaths);
+    console.log('Optimizing images...');
+    const optimizedImagePaths = await optimizeImages(imagePaths);
+    console.log(`Optimized ${optimizedImagePaths.length} images successfully`);
+
+    console.log('Uploading images to Cloudinary...');
+    const imageUrls = await uploadToCloudinary(optimizedImagePaths);
     console.log(`Successfully uploaded ${imageUrls.length} images to Cloudinary`);
 
     const newspaper = new NewPaperModel({
@@ -262,16 +290,16 @@ const getAvailableDates = async (req, res) => {
       const endDate = new Date(parseInt(year), parseInt(month), 0, 23, 59, 59, 999);
       
       query = {
-        publicationDate: { $gte: startDate, $lte: endDate }
+        createdAt: { $gte: startDate, $lte: endDate }
       };
     }
     
     const dates = await NewPaperModel.find(query)
-      .select('publicationDate')
-      .sort({ publicationDate: 1 });
+      .select('createdAt')
+      .sort({ createdAt: 1 });
     
     const formattedDates = dates.map(item => {
-      const date = new Date(item.publicationDate);
+      const date = new Date(item.createdAt);
       return {
         date: date.toISOString().split('T')[0],
         id: item._id
@@ -291,10 +319,80 @@ const getAvailableDates = async (req, res) => {
     });
   }
 };
+const getNewspaperByPagination = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1; // Current page (default: 1)
+    const limit = 1; // Return one newspaper per request
+    const skip = (page - 1) * limit;
+
+    // Get total count of newspapers for pagination info
+    const totalNewspapers = await NewPaperModel.countDocuments();
+    const totalPages = Math.ceil(totalNewspapers / limit);
+
+    // Get the newspaper for the current page
+    const newspaper = await NewPaperModel.findOne()
+      .sort({ createdAt: -1 }) // Sort by newest first
+      .skip(skip)
+      .limit(limit);
+
+    if (!newspaper) {
+      return res.status(404).json({
+        success: false,
+        message: 'No newspapers found',
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: newspaper,
+      pagination: {
+        currentPage: page,
+        totalPages,
+        totalNewspapers,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
+      },
+    });
+
+  } catch (error) {
+    console.error('getNewspaperByPagination:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch newspaper',
+      error: error.message
+    });
+  }
+};
+const deleteNewspaper = async( req, res ) => {
+  try {
+    const {id} = req.params;
+    const deleteNewspaperDetails = await NewPaperModel.findByIdAndDelete(id);
+    if(!deleteNewspaperDetails)
+    {
+      return res.status(404).send({
+      success: false,
+      message: `Newspaper details not found with id : ${id}`,
+      })
+    }
+    res.status(200).send({
+      success: true,
+      message: `Newspaper details deleted with id : ${id}`
+    })
+  } catch (error) {
+    console.error('deleteNewspaper:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete the requested data',
+      error: error.message
+    });
+  }
+}
 
 module.exports = {
   uploadNewspaper: [upload.single('pdf'), uploadNewspaper],
   getLatestNewspaper,
   getNewspaperByDate,
-  getAvailableDates
+  getAvailableDates,
+  getNewspaperByPagination,
+  deleteNewspaper,
 };
