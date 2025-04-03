@@ -20,14 +20,9 @@ const Login = () => {
         password
       });
 
-      // With axios, the response data is in response.data
       const { token, user } = response.data;
-
-      // Store token in localStorage
       localStorage.setItem('token', token);
       localStorage.setItem('user', JSON.stringify(user));
-      
-      // Redirect to dashboard
       navigate('/dashboard');
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'An error occurred during login');
@@ -37,15 +32,15 @@ const Login = () => {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-100">
-      <div className="w-full max-w-md rounded-lg bg-white p-8 shadow-lg">
+    <div className="flex min-h-screen items-center justify-center bg-black">
+      <div className="w-full max-w-md rounded-lg bg-zinc-900 p-8 shadow-lg border border-red-600">
         <div className="mb-6 text-center">
-          <h2 className="text-3xl font-bold text-gray-800">Admin Login</h2>
-          <div className="mt-2 h-1 w-16 bg-blue-500 mx-auto rounded"></div>
+          <h2 className="text-3xl font-bold text-white">Admin Login</h2>
+          <div className="mt-2 h-1 w-16 bg-red-600 mx-auto rounded"></div>
         </div>
 
         {error && (
-          <div className="mb-4 rounded bg-red-100 p-3 text-red-700">
+          <div className="mb-4 rounded bg-red-900/50 p-3 text-red-300 border border-red-600">
             {error}
           </div>
         )}
@@ -54,7 +49,7 @@ const Login = () => {
           <div className="mb-4">
             <label 
               htmlFor="email" 
-              className="block text-sm font-medium text-gray-700 mb-1"
+              className="block text-sm font-medium text-gray-300 mb-1"
             >
               Email
             </label>
@@ -63,7 +58,7 @@ const Login = () => {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              className="w-full rounded border border-zinc-700 bg-zinc-800 text-white px-3 py-2 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/30"
               required
             />
           </div>
@@ -71,7 +66,7 @@ const Login = () => {
           <div className="mb-6">
             <label 
               htmlFor="password" 
-              className="block text-sm font-medium text-gray-700 mb-1"
+              className="block text-sm font-medium text-gray-300 mb-1"
             >
               Password
             </label>
@@ -80,7 +75,7 @@ const Login = () => {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              className="w-full rounded border border-zinc-700 bg-zinc-800 text-white px-3 py-2 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/30"
               required
             />
           </div>
@@ -88,8 +83,7 @@ const Login = () => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full flex items-center justify-center rounded bg-blue-700 py-2 px-4 text-white hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
-            style={{ backgroundColor: '#1e3a8a' }}
+            className="w-full flex items-center justify-center rounded bg-red-600 py-2 px-4 text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-zinc-900 transition-colors disabled:opacity-50"
           >
             {loading ? (
               <>

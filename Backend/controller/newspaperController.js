@@ -7,7 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const { promisify } = require('util');
 const cloudinary = require('../cloudinary/config');
-const NewPaperModel = require('../model/NewPaper');
+const {NewspaperDetails} = require('../model/NewPaper');
 
 // Promisify file system functions
 const unlink = promisify(fs.unlink);
@@ -171,7 +171,7 @@ const uploadNewspaper = async (req, res) => {
     const imageUrls = await uploadToCloudinary(optimizedImagePaths);
     console.log(`Successfully uploaded ${imageUrls.length} images to Cloudinary`);
 
-    const newspaper = new NewPaperModel({
+    const newspaper = new NewspaperDetails({
       newspaperLinks: imageUrls,
       totalpages: imageUrls.length,
       originalFilename: req.file.originalname,
@@ -211,7 +211,7 @@ const uploadNewspaper = async (req, res) => {
 
 const getLatestNewspaper = async (req, res) => {
   try {
-    const latestNewspaper = await NewPaperModel.findOne().sort({ createdAt: -1 });
+    const latestNewspaper = await NewspaperDetails.findOne().sort({ createdAt: -1 });
 
     if (!latestNewspaper) {
       return res.status(404).json({ 
@@ -253,7 +253,7 @@ const getNewspaperByDate = async (req, res) => {
     const endDate = new Date(date);
     endDate.setHours(23, 59, 59, 999);
 
-    const newspaper = await NewPaperModel.findOne({
+    const newspaper = await NewspaperDetails.findOne({
       createdAt: { $gte: startDate, $lte: endDate }
     });
 
@@ -294,7 +294,7 @@ const getAvailableDates = async (req, res) => {
       };
     }
     
-    const dates = await NewPaperModel.find(query)
+    const dates = await NewspaperDetails.find(query)
       .select('createdAt')
       .sort({ createdAt: 1 });
     
@@ -326,11 +326,11 @@ const getNewspaperByPagination = async (req, res) => {
     const skip = (page - 1) * limit;
 
     // Get total count of newspapers for pagination info
-    const totalNewspapers = await NewPaperModel.countDocuments();
+    const totalNewspapers = await NewspaperDetails.countDocuments();
     const totalPages = Math.ceil(totalNewspapers / limit);
 
     // Get the newspaper for the current page
-    const newspaper = await NewPaperModel.findOne()
+    const newspaper = await NewspaperDetails.findOne()
       .sort({ createdAt: -1 }) // Sort by newest first
       .skip(skip)
       .limit(limit);
@@ -366,7 +366,7 @@ const getNewspaperByPagination = async (req, res) => {
 const deleteNewspaper = async( req, res ) => {
   try {
     const {id} = req.params;
-    const deleteNewspaperDetails = await NewPaperModel.findByIdAndDelete(id);
+    const deleteNewspaperDetails = await NewspaperDetails.findByIdAndDelete(id);
     if(!deleteNewspaperDetails)
     {
       return res.status(404).send({

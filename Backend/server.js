@@ -5,6 +5,7 @@ const dotenv  = require('dotenv');
 const connectDB = require('./config/db.js');
 const userRoute = require("./route/userRoutes.js");
 const newspaperRoute = require("./route/newspaperRoutes.js");
+const navlinkRoute = require("./route/navlinkRoutes.js");
 const { createDefaultAdmin } = require("./controller/userController.js") 
 
 
@@ -22,6 +23,8 @@ app.use(express.json());
 app.use("/user", userRoute);
 
 app.use("/newspaper", newspaperRoute);
+
+app.use("/navlink", navlinkRoute);
 
 
 app.listen(port, async () => {

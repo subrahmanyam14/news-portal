@@ -1,144 +1,157 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Search, Menu, X, LogIn, LayoutDashboard, LogOut } from 'lucide-react';
+import { Menu, X, LogIn, LayoutDashboard, LogOut, HelpCircle, Shield, Info } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 
-const Navbar = ({ currentDate, onDateChange }) => {
+const Navbar = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [links, setLinks] = useState([]);
+  const [loadingLinks, setLoadingLinks] = useState(true);
   const navigate = useNavigate();
 
-  // Check authentication status on component mount
+  // Default links in case API fails
+  const defaultLinks = [
+    { name: 'About Us', path: '/about', icon: <Info className="w-4 h-4 mr-1" /> },
+    { name: 'Security', path: '/security', icon: <Shield className="w-4 h-4 mr-1" /> },
+    { name: 'Help', path: '/help', icon: <HelpCircle className="w-4 h-4 mr-1" /> }
+  ];
+
+  // Fetch links from API
   useEffect(() => {
-    const checkAuthStatus = () => {
-      const token = localStorage.getItem('token');
-      setIsLoggedIn(!!token);
+    const fetchLinks = async () => {
+      try {
+        const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}/navlink/get`);
+        
+        // Transform API response to match our expected format
+        const transformedLinks = response.data.map(link => ({
+          name: link.name,
+          path: link.path,
+          _id: link._id,
+          icon: getIconForPath(link.path)
+        }));
+        
+        setLinks(transformedLinks);
+      } catch (error) {
+        console.error('Failed to fetch links, using defaults:', error);
+        setLinks(defaultLinks);
+      } finally {
+        setLoadingLinks(false);
+      }
     };
-  
-    checkAuthStatus(); // Check initially
-  
-    window.addEventListener('storage', checkAuthStatus); // Listen for storage updates
-  
+
+    // Helper function to assign icons based on path
+    const getIconForPath = (path) => {
+      switch(path) {
+        case '/about':
+          return <Info className="w-4 h-4 mr-1" />;
+        case '/security':
+          return <Shield className="w-4 h-4 mr-1" />;
+        case '/help':
+          return <HelpCircle className="w-4 h-4 mr-1" />;
+        default:
+          return <Info className="w-4 h-4 mr-1" />;
+      }
+    };
+
+    fetchLinks();
+  }, []);
+
+  // Auth check
+  useEffect(() => {
+    const checkAuthStatus = async () => {
+      const token = localStorage.getItem('token');
+      const user = localStorage.getItem('user');
+      
+      if (token && user) {
+        try {
+          // Verify token with backend
+          await axios.get(`${process.env.REACT_APP_BACKEND_URL}/auth/verify`, {
+            headers: {
+              Authorization: `Bearer ${token}`
+            }
+          });
+          setIsLoggedIn(true);
+        } catch (err) {
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          setIsLoggedIn(false);
+        }
+      } else {
+        setIsLoggedIn(false);
+      }
+    };
+
+    checkAuthStatus();
+    window.addEventListener('storage', checkAuthStatus);
+
     return () => {
       window.removeEventListener('storage', checkAuthStatus);
     };
   }, []);
-  
 
-  // Safely format date with fallback to today's date if not provided
-  const formatDate = (date) => {
-    const dateToFormat = date || new Date();
-    try {
-      return dateToFormat.toLocaleDateString('en-US', { 
-        day: 'numeric', 
-        month: 'short', 
-        year: 'numeric' 
-      });
-    } catch (error) {
-      console.error('Date formatting error:', error);
-      return new Date().toLocaleDateString('en-US', {
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric'
-      });
-    }
+  const handleNavigation = (path) => {
+    navigate(path);
+    setIsMobileMenuOpen(false);
   };
 
-  // Handle date change safely
-  const handleDateChange = (dateString) => {
-    if (!onDateChange) return;
-    try {
-      const newDate = new Date(dateString);
-      if (!isNaN(newDate.getTime())) {
-        onDateChange(newDate);
-      }
-    } catch (error) {
-      console.error('Date change error:', error);
-    }
-  };
+  const handleLogin = () => handleNavigation('/login');
+  const handleDashboard = () => handleNavigation('/dashboard');
+  const handleHome = () => handleNavigation('/');
 
-  // Get safe date value for input
-  const getSafeDateValue = () => {
-    if (!currentDate) return new Date().toISOString().split('T')[0];
-    try {
-      return currentDate.toISOString().split('T')[0];
-    } catch (error) {
-      return new Date().toISOString().split('T')[0];
-    }
-  };
-
-  // Handle login navigation
-  const handleLogin = () => {
-    navigate('/login');
-  };
-
-  // Handle dashboard navigation
-  const handleDashboard = () => {
-    navigate('/dashboard');
-  };
-
-  // Handle home navigation
-  const handleHome = () => {
-    navigate('/');
-  };
-
-  // Handle logout
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     setIsLoggedIn(false);
-    navigate('/');
+    handleHome();
   };
 
+  // Get the links to display (either from API or defaults)
+  const displayLinks = loadingLinks ? defaultLinks : (links.length > 0 ? links : defaultLinks);
+
   return (
-    <header className="bg-blue-900 text-white shadow-md">
+    <header className="bg-black text-white shadow-md border-b border-red-600">
       <div className="container mx-auto px-4 py-4 flex flex-wrap items-center justify-between">
         <div className="flex items-center">
           <div 
             className="mr-4 text-3xl font-bold cursor-pointer"
             onClick={handleHome}
           >
-            <span className="text-yellow-400">E-</span> 
-            <span className="text-blue-300">Paper</span>
+            <span className="text-red-600">E-</span> 
+            <span className="text-white">Paper</span>
           </div>
-          <div className="hidden md:block text-sm">
+          <div className="hidden md:block text-sm text-gray-300">
             <span className="mr-2">|</span>
             <span>A Portrait of Telangana People's Life</span>
           </div>
         </div>
         
         <div className="hidden md:flex items-center space-x-4">
-          <button 
-            className="flex items-center px-3 py-1 bg-blue-800 rounded hover:bg-blue-700"
-            onClick={() => setIsCalendarOpen(!isCalendarOpen)}
-          >
-            <Calendar className="w-4 h-4 mr-1" />
-            <span>{formatDate(currentDate)}</span>
-          </button>
-          <div className="flex border border-blue-700 rounded overflow-hidden">
-            <input 
-              type="text" 
-              placeholder="Search articles..." 
-              className="px-3 py-1 bg-blue-800 text-white placeholder-blue-300 focus:outline-none"
-            />
-            <button className="px-2 bg-blue-700">
-              <Search className="w-4 h-4" />
+          {/* Additional Links */}
+          {displayLinks.map((link) => (
+            <button
+              key={link._id || link.path}  // Use _id if available, otherwise fallback to path
+              onClick={() => handleNavigation(link.path)}
+              className="flex items-center px-3 py-1 text-gray-300 hover:text-white transition-colors"
+            >
+              {link.icon}
+              <span>{link.name}</span>
             </button>
-          </div>
+          ))}
           
-          {/* Login/Dashboard/Logout Buttons */}
+          {/* Auth Buttons */}
           {isLoggedIn ? (
             <div className="flex space-x-2">
               <button
                 onClick={handleDashboard}
-                className="flex items-center px-3 py-1 bg-green-600 rounded hover:bg-green-700"
+                className="flex items-center px-3 py-1 bg-red-600 rounded hover:bg-red-700 transition-colors"
               >
                 <LayoutDashboard className="w-4 h-4 mr-1" />
                 <span>Dashboard</span>
               </button>
               <button
                 onClick={handleLogout}
-                className="flex items-center px-3 py-1 bg-red-600 rounded hover:bg-red-700"
+                className="flex items-center px-3 py-1 bg-zinc-800 rounded hover:bg-zinc-700 transition-colors border border-red-600"
               >
                 <LogOut className="w-4 h-4 mr-1" />
                 <span>Logout</span>
@@ -147,7 +160,7 @@ const Navbar = ({ currentDate, onDateChange }) => {
           ) : (
             <button
               onClick={handleLogin}
-              className="flex items-center px-3 py-1 bg-yellow-500 rounded hover:bg-yellow-600"
+              className="flex items-center px-3 py-1 bg-red-600 rounded hover:bg-red-700 transition-colors"
             >
               <LogIn className="w-4 h-4 mr-1" />
               <span>Login</span>
@@ -156,8 +169,9 @@ const Navbar = ({ currentDate, onDateChange }) => {
         </div>
         
         <button 
-          className="md:hidden"
+          className="md:hidden text-white hover:text-red-400 transition-colors"
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          aria-label="Toggle menu"
         >
           {isMobileMenuOpen ? <X /> : <Menu />}
         </button>
@@ -165,64 +179,46 @@ const Navbar = ({ currentDate, onDateChange }) => {
       
       {/* Mobile menu */}
       {isMobileMenuOpen && (
-        <div className="md:hidden px-4 py-3 bg-blue-800 flex flex-col space-y-3">
-          <button 
-            className="flex items-center px-3 py-1 bg-blue-700 rounded"
-            onClick={() => setIsCalendarOpen(!isCalendarOpen)}
-          >
-            <Calendar className="w-4 h-4 mr-1" />
-            <span>{formatDate(currentDate)}</span>
-          </button>
+        <div className="md:hidden px-4 py-3 bg-zinc-900 flex flex-col space-y-3 border-t border-red-600">
+          {/* Additional Links in Mobile */}
+          {displayLinks.map((link) => (
+            <button
+              key={link._id || link.path}
+              onClick={() => handleNavigation(link.path)}
+              className="flex items-center justify-center px-3 py-2 text-gray-300 hover:text-white transition-colors"
+            >
+              {link.icon}
+              <span>{link.name}</span>
+            </button>
+          ))}
           
-          {/* Mobile Login/Dashboard/Logout Buttons */}
+          {/* Auth Buttons in Mobile */}
           {isLoggedIn ? (
             <>
               <button
                 onClick={handleDashboard}
-                className="flex items-center px-3 py-1 bg-green-600 rounded hover:bg-green-700"
+                className="flex items-center justify-center px-3 py-2 bg-red-600 rounded hover:bg-red-700 transition-colors"
               >
-                <LayoutDashboard className="w-4 h-4 mr-1" />
+                <LayoutDashboard className="w-5 h-5 mr-2" />
                 <span>Dashboard</span>
               </button>
               <button
                 onClick={handleLogout}
-                className="flex items-center px-3 py-1 bg-red-600 rounded hover:bg-red-700"
+                className="flex items-center justify-center px-3 py-2 bg-zinc-800 rounded hover:bg-zinc-700 transition-colors border border-red-600"
               >
-                <LogOut className="w-4 h-4 mr-1" />
+                <LogOut className="w-5 h-5 mr-2" />
                 <span>Logout</span>
               </button>
             </>
           ) : (
             <button
               onClick={handleLogin}
-              className="flex items-center px-3 py-1 bg-yellow-500 rounded hover:bg-yellow-600"
+              className="flex items-center justify-center px-3 py-2 bg-red-600 rounded hover:bg-red-700 transition-colors"
             >
-              <LogIn className="w-4 h-4 mr-1" />
+              <LogIn className="w-5 h-5 mr-2" />
               <span>Login</span>
             </button>
           )}
-        </div>
-      )}
-
-      {/* Calendar popup */}
-      {isCalendarOpen && (
-        <div className="absolute top-20 right-4 md:right-20 bg-white p-4 rounded shadow-lg z-10">
-          <div className="flex justify-between items-center mb-2">
-            <h3 className="font-medium">Select Date</h3>
-            <button onClick={() => setIsCalendarOpen(false)}>
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-          <input 
-            type="date" 
-            value={getSafeDateValue()}
-            onChange={(e) => {
-              handleDateChange(e.target.value);
-              setIsCalendarOpen(false);
-            }}
-            className="border rounded p-2"
-            max={new Date().toISOString().split('T')[0]}
-          />
         </div>
       )}
     </header>

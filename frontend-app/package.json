@@ -5,6 +5,8 @@
   "dependencies": {
     "@testing-library/react": "^13.4.0",
     "axios": "^1.8.4",
+    "date-fns": "^4.1.0",
+    "jspdf": "^3.0.1",
     "lucide-react": "^0.487.0",
     "react": "^18.2.0",
     "react-datepicker": "^8.2.1",
