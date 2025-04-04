@@ -2,13 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { Menu, X, LogIn, LayoutDashboard, LogOut, HelpCircle, Shield, Info } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { useAuth } from './AuthContext';
 
 const Navbar = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [links, setLinks] = useState([]);
   const [loadingLinks, setLoadingLinks] = useState(true);
   const navigate = useNavigate();
+  
+  // Use the auth context
+  const { isLoggedIn, logout } = useAuth();
 
   // Default links in case API fails
   const defaultLinks = [
@@ -57,39 +60,6 @@ const Navbar = () => {
     fetchLinks();
   }, []);
 
-  // Auth check
-  useEffect(() => {
-    const checkAuthStatus = async () => {
-      const token = localStorage.getItem('token');
-      const user = localStorage.getItem('user');
-      
-      if (token && user) {
-        try {
-          // Verify token with backend
-          await axios.get(`${process.env.REACT_APP_BACKEND_URL}/auth/verify`, {
-            headers: {
-              Authorization: `Bearer ${token}`
-            }
-          });
-          setIsLoggedIn(true);
-        } catch (err) {
-          localStorage.removeItem('token');
-          localStorage.removeItem('user');
-          setIsLoggedIn(false);
-        }
-      } else {
-        setIsLoggedIn(false);
-      }
-    };
-
-    checkAuthStatus();
-    window.addEventListener('storage', checkAuthStatus);
-
-    return () => {
-      window.removeEventListener('storage', checkAuthStatus);
-    };
-  }, []);
-
   const handleNavigation = (path) => {
     navigate(path);
     setIsMobileMenuOpen(false);
@@ -100,9 +70,8 @@ const Navbar = () => {
   const handleHome = () => handleNavigation('/');
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    setIsLoggedIn(false);
+    // Use the logout function from context
+    logout();
     handleHome();
   };
 
@@ -110,17 +79,17 @@ const Navbar = () => {
   const displayLinks = loadingLinks ? defaultLinks : (links.length > 0 ? links : defaultLinks);
 
   return (
-    <header className="bg-black text-white shadow-md border-b border-red-600">
+    <header className="bg-[#403fbb] text-white shadow-md">
       <div className="container mx-auto px-4 py-4 flex flex-wrap items-center justify-between">
         <div className="flex items-center">
           <div 
             className="mr-4 text-3xl font-bold cursor-pointer"
             onClick={handleHome}
           >
-            <span className="text-red-600">E-</span> 
+            <span className="text-white">E-</span> 
             <span className="text-white">Paper</span>
           </div>
-          <div className="hidden md:block text-sm text-gray-300">
+          <div className="hidden md:block text-sm text-white">
             <span className="mr-2">|</span>
             <span>A Portrait of Telangana People's Life</span>
           </div>
@@ -132,7 +101,7 @@ const Navbar = () => {
             <button
               key={link._id || link.path}  // Use _id if available, otherwise fallback to path
               onClick={() => handleNavigation(link.path)}
-              className="flex items-center px-3 py-1 text-gray-300 hover:text-white transition-colors"
+              className="flex items-center px-3 py-1 text-white hover:text-gray-200 transition-colors"
             >
               {link.icon}
               <span>{link.name}</span>
@@ -144,14 +113,14 @@ const Navbar = () => {
             <div className="flex space-x-2">
               <button
                 onClick={handleDashboard}
-                className="flex items-center px-3 py-1 bg-red-600 rounded hover:bg-red-700 transition-colors"
+                className="flex items-center px-3 py-1 bg-white text-[#403fbb] rounded hover:bg-gray-200 transition-colors"
               >
                 <LayoutDashboard className="w-4 h-4 mr-1" />
                 <span>Dashboard</span>
               </button>
               <button
                 onClick={handleLogout}
-                className="flex items-center px-3 py-1 bg-zinc-800 rounded hover:bg-zinc-700 transition-colors border border-red-600"
+                className="flex items-center px-3 py-1 bg-[#403fbb] rounded hover:bg-[#5756c5] transition-colors border border-white"
               >
                 <LogOut className="w-4 h-4 mr-1" />
                 <span>Logout</span>
@@ -160,7 +129,7 @@ const Navbar = () => {
           ) : (
             <button
               onClick={handleLogin}
-              className="flex items-center px-3 py-1 bg-red-600 rounded hover:bg-red-700 transition-colors"
+              className="flex items-center px-3 py-1 bg-white text-[#403fbb] rounded hover:bg-gray-200 transition-colors"
             >
               <LogIn className="w-4 h-4 mr-1" />
               <span>Login</span>
@@ -169,7 +138,7 @@ const Navbar = () => {
         </div>
         
         <button 
-          className="md:hidden text-white hover:text-red-400 transition-colors"
+          className="md:hidden text-white hover:text-gray-200 transition-colors"
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
           aria-label="Toggle menu"
         >
@@ -179,13 +148,13 @@ const Navbar = () => {
       
       {/* Mobile menu */}
       {isMobileMenuOpen && (
-        <div className="md:hidden px-4 py-3 bg-zinc-900 flex flex-col space-y-3 border-t border-red-600">
+        <div className="md:hidden px-4 py-3 bg-[#5756c5] flex flex-col space-y-3">
           {/* Additional Links in Mobile */}
           {displayLinks.map((link) => (
             <button
               key={link._id || link.path}
               onClick={() => handleNavigation(link.path)}
-              className="flex items-center justify-center px-3 py-2 text-gray-300 hover:text-white transition-colors"
+              className="flex items-center justify-center px-3 py-2 text-white hover:text-gray-200 transition-colors"
             >
               {link.icon}
               <span>{link.name}</span>
@@ -197,14 +166,14 @@ const Navbar = () => {
             <>
               <button
                 onClick={handleDashboard}
-                className="flex items-center justify-center px-3 py-2 bg-red-600 rounded hover:bg-red-700 transition-colors"
+                className="flex items-center justify-center px-3 py-2 bg-white text-[#403fbb] rounded hover:bg-gray-200 transition-colors"
               >
                 <LayoutDashboard className="w-5 h-5 mr-2" />
                 <span>Dashboard</span>
               </button>
               <button
                 onClick={handleLogout}
-                className="flex items-center justify-center px-3 py-2 bg-zinc-800 rounded hover:bg-zinc-700 transition-colors border border-red-600"
+                className="flex items-center justify-center px-3 py-2 bg-[#403fbb] rounded hover:bg-[#5756c5] transition-colors border border-white"
               >
                 <LogOut className="w-5 h-5 mr-2" />
                 <span>Logout</span>
@@ -213,7 +182,7 @@ const Navbar = () => {
           ) : (
             <button
               onClick={handleLogin}
-              className="flex items-center justify-center px-3 py-2 bg-red-600 rounded hover:bg-red-700 transition-colors"
+              className="flex items-center justify-center px-3 py-2 bg-white text-[#403fbb] rounded hover:bg-gray-200 transition-colors"
             >
               <LogIn className="w-5 h-5 mr-2" />
               <span>Login</span>

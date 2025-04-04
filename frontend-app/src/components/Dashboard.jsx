@@ -3,22 +3,22 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 const Dashboard = () => {
   const [newspaper, setNewspaper] = useState(null);
   const [loading, setLoading] = useState(false);
   const [uploadLoading, setUploadLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
   const [pagination, setPagination] = useState({});
   const [availableDates, setAvailableDates] = useState([]);
   const [selectedDate, setSelectedDate] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [navLinks, setNavLinks] = useState([]);
-  const [newLink, setNewLink] = useState({ name: '', path: '' });
   const [editingLink, setEditingLink] = useState(null);
   const [navLinksLoading, setNavLinksLoading] = useState(false);
   const [multipleLinks, setMultipleLinks] = useState('');
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const navigate = useNavigate();
 
   // Check if user is authenticated
@@ -29,6 +29,7 @@ const Dashboard = () => {
     } else {
       fetchNewspaper();
       fetchAvailableDates();
+      fetchNavLinks();
     }
   }, [navigate]);
 
@@ -47,7 +48,7 @@ const Dashboard = () => {
       setPagination(response.data.pagination);
       setCurrentPage(page);
     } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Failed to fetch newspaper');
+      toast.error(err.response?.data?.message || err.message || 'Failed to fetch newspaper');
     } finally {
       setLoading(false);
     }
@@ -65,9 +66,9 @@ const Dashboard = () => {
       });
 
       setNewspaper(response.data.data);
-      setPagination({}); // Clear pagination when viewing by date
+      setPagination({});
     } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Failed to fetch newspaper by date');
+      toast.error(err.response?.data?.message || err.message || 'Failed to fetch newspaper by date');
     } finally {
       setLoading(false);
     }
@@ -89,6 +90,7 @@ const Dashboard = () => {
 
       setAvailableDates(response.data.data);
     } catch (err) {
+      toast.error('Failed to fetch available dates');
       console.error('Failed to fetch available dates:', err);
     }
   };
@@ -101,13 +103,11 @@ const Dashboard = () => {
     if (!file) return;
     
     if (file.type !== 'application/pdf') {
-      setError('Only PDF files are allowed');
+      toast.error('Only PDF files are allowed');
       return;
     }
 
     setUploadLoading(true);
-    setError('');
-    setSuccess('');
     
     try {
       const formData = new FormData();
@@ -121,11 +121,11 @@ const Dashboard = () => {
         },
       });
 
-      setSuccess('PDF uploaded successfully');
+      toast.success('PDF uploaded successfully');
       fetchNewspaper();
       fetchAvailableDates();
     } catch (err) {
-      setError(err.response?.data?.message || err.message || 'An error occurred during upload');
+      toast.error(err.response?.data?.message || err.message || 'An error occurred during upload');
     } finally {
       setUploadLoading(false);
       e.target.value = '';
@@ -146,27 +146,23 @@ const Dashboard = () => {
         },
       });
 
-      setSuccess('Newspaper deleted successfully');
+      toast.success('Newspaper deleted successfully');
       setNewspaper(null);
       fetchNewspaper();
       fetchAvailableDates();
     } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Failed to delete newspaper');
+      toast.error(err.response?.data?.message || err.message || 'Failed to delete newspaper');
     }
   };
 
   // Handle date selection
   const handleDateSelect = (date) => {
-    const formattedDate = date.toISOString().split('T')[0];
+    const nextDay = new Date(date);
+    nextDay.setDate(nextDay.getDate() + 1);
+    
+    const formattedDate = nextDay.toISOString().split('T')[0];
     setSelectedDate(date);
     fetchNewspaperByDate(formattedDate);
-  };
-
-  // Logout function
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    navigate('/login');
   };
 
   // Format date safely
@@ -184,7 +180,6 @@ const Dashboard = () => {
     }
   };
 
-
   // Fetch navigation links
   const fetchNavLinks = async () => {
     setNavLinksLoading(true);
@@ -197,93 +192,48 @@ const Dashboard = () => {
       });
       setNavLinks(response.data);
     } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Failed to fetch navigation links');
+      toast.error(err.response?.data?.message || err.message || 'Failed to fetch navigation links');
     } finally {
       setNavLinksLoading(false);
     }
   };
 
-  // Add new navigation link
-  const handleAddLink = async () => {
-    if (!newLink.name || !newLink.path) {
-      setError('Both name and path are required');
-      return;
-    }
-
-    try {
-      const token = localStorage.getItem('token');
-      await axios.post(`${process.env.REACT_APP_BACKEND_URL}/navlink/create`, newLink, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      setSuccess('Navigation link added successfully');
-      setNewLink({ name: '', path: '' });
-      fetchNavLinks();
-    } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Failed to add navigation link');
-    }
-  };
-
-  // Add multiple navigation links
-  const handleAddMultipleLinks = async () => {
-    try {
-      // Parse the JSON input
-      let linksArray;
-      try {
-        linksArray = JSON.parse(multipleLinks);
-      } catch (e) {
-        setError('Invalid JSON format');
-        return;
-      }
-      
-      if (!Array.isArray(linksArray)) {
-        setError('Input must be a valid JSON array');
-        return;
-      }
-
-      // Validate each link
-      for (const link of linksArray) {
-        if (!link.name || !link.path) {
-          setError('Each link must have both name and path properties');
-          return;
-        }
-      }
-
-      const token = localStorage.getItem('token');
-      await axios.post(`${process.env.REACT_APP_BACKEND_URL}/navlink/create-multiple`, linksArray, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      setSuccess(`${linksArray.length} navigation links added successfully`);
-      setMultipleLinks('');
-      fetchNavLinks();
-    } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Failed to add navigation links');
-    }
+  // Open edit modal
+  const openEditModal = (link) => {
+    setEditingLink({...link});
+    setIsEditModalOpen(true);
   };
 
   // Update navigation link
   const handleUpdateLink = async () => {
     if (!editingLink.name || !editingLink.path) {
-      setError('Both name and path are required');
+      toast.error('Both name and path are required');
       return;
     }
 
     try {
       const token = localStorage.getItem('token');
-      await axios.put(`${process.env.REACT_APP_BACKEND_URL}/navlink/update/${editingLink._id}`, editingLink, {
-        headers: {
-          Authorization: `Bearer ${token}`,
+      await axios.put(
+        `${process.env.REACT_APP_BACKEND_URL}/navlink/update/${editingLink._id}`, 
+        {
+          linkId: editingLink._id,
+          updatedLink: {
+            name: editingLink.name,
+            path: editingLink.path
+          }
         },
-      });
-      setSuccess('Navigation link updated successfully');
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      toast.success('Navigation link updated successfully');
       setEditingLink(null);
+      setIsEditModalOpen(false);
       fetchNavLinks();
     } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Failed to update navigation link');
+      toast.error(err.response?.data?.message || err.message || 'Failed to update navigation link');
     }
   };
 
@@ -300,10 +250,48 @@ const Dashboard = () => {
           Authorization: `Bearer ${token}`,
         },
       });
-      setSuccess('Navigation link deleted successfully');
+      toast.success('Navigation link deleted successfully');
       fetchNavLinks();
     } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Failed to delete navigation link');
+      toast.error(err.response?.data?.message || err.message || 'Failed to delete navigation link');
+    }
+  };
+
+  // Add multiple navigation links
+  const handleAddMultipleLinks = async () => {
+    try {
+      let linksArray;
+      try {
+        linksArray = JSON.parse(multipleLinks);
+      } catch (e) {
+        toast.error('Invalid JSON format');
+        return;
+      }
+      
+      if (!Array.isArray(linksArray)) {
+        toast.error('Input must be a valid JSON array');
+        return;
+      }
+
+      for (const link of linksArray) {
+        if (!link.name || !link.path) {
+          toast.error('Each link must have both name and path properties');
+          return;
+        }
+      }
+
+      const token = localStorage.getItem('token');
+      await axios.post(`${process.env.REACT_APP_BACKEND_URL}/navlink/create-multiple`, linksArray, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      toast.success(`${linksArray.length} navigation links added successfully`);
+      setMultipleLinks('');
+      fetchNavLinks();
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.message || 'Failed to add navigation links');
     }
   };
 
@@ -320,134 +308,103 @@ const Dashboard = () => {
           Authorization: `Bearer ${token}`,
         },
       });
-      setSuccess('All navigation links cleared successfully');
+      toast.success('All navigation links cleared successfully');
       fetchNavLinks();
     } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Failed to clear navigation links');
+      toast.error(err.response?.data?.message || err.message || 'Failed to clear navigation links');
     }
   };
 
-  // Initialize data
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      navigate('/login');
-    } else {
-      fetchNewspaper();
-      fetchAvailableDates();
-      fetchNavLinks();
-    }
-  }, [navigate]);
-
-  // Fetch newspaper data with pagination
-  // const fetchNewspaper = async (page = 1) => {
-  //   setLoading(true);
-  //   try {
-  //     const token = localStorage.getItem('token');
-  //     const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}/newspaper/page?page=${page}`, {
-  //       headers: {
-  //         Authorization: `Bearer ${token}`,
-  //       },
-  //     });
-
-  //     setNewspaper(response.data.data);
-  //     setPagination(response.data.pagination);
-  //     setCurrentPage(page);
-  //   } catch (err) {
-  //     setError(err.response?.data?.message || err.message || 'Failed to fetch newspaper');
-  //   } finally {
-  //     setLoading(false);
-  //   }
-  // };
-
-  // Other existing functions (fetchNewspaperByDate, fetchAvailableDates, handleFileUpload, 
-  // handleDelete, handleDateSelect, handleLogout, formatDate) remain the same...
+  // Edit Link Modal Component
+  const EditLinkModal = () => {
+    if (!isEditModalOpen || !editingLink) return null;
+    
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 w-full max-w-md">
+          <h3 className="text-xl font-semibold mb-4 text-gray-800">Edit Navigation Link</h3>
+          
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+            <input
+              type="text"
+              value={editingLink.name}
+              onChange={(e) => setEditingLink({...editingLink, name: e.target.value})}
+              className="w-full border border-gray-300 bg-white text-gray-800 rounded p-2 focus:border-[#403fbb] focus:outline-none"
+              placeholder="Link name"
+            />
+          </div>
+          
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Path</label>
+            <input
+              type="text"
+              value={editingLink.path}
+              onChange={(e) => setEditingLink({...editingLink, path: e.target.value})}
+              className="w-full border border-gray-300 bg-white text-gray-800 rounded p-2 focus:border-[#403fbb] focus:outline-none"
+              placeholder="/path"
+            />
+          </div>
+          
+          <div className="flex justify-end space-x-3">
+            <button
+              onClick={() => {
+                setIsEditModalOpen(false);
+                setEditingLink(null);
+              }}
+              className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleUpdateLink}
+              className="px-4 py-2 bg-[#403fbb] text-white rounded hover:bg-[#5756c5] transition-colors"
+            >
+              Update Link
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
-    <div className="min-h-screen bg-black">
+    <div className="min-h-screen bg-white">
+      <ToastContainer
+        position="top-right"
+        autoClose={5000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="colored"
+      />
+      
+      {/* Edit Modal */}
+      <EditLinkModal />
+      
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-zinc-900 rounded-lg shadow-lg p-6 border border-red-600">
+        <div className="bg-white rounded-lg shadow-lg p-6 border border-[#403fbb]">
           {/* Navigation Links Management Section */}
-          <div className="mb-8 p-6 border border-dashed border-blue-500 rounded-lg bg-zinc-800">
-            <h2 className="text-xl font-semibold mb-4 text-white">Navigation Links Management</h2>
-            
-            {/* Add/Edit Form */}
-            <div className="mb-6">
-              <h3 className="text-lg font-medium mb-3 text-white">
-                {editingLink ? 'Edit Link' : 'Add New Link'}
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">Name</label>
-                  <input
-                    type="text"
-                    value={editingLink ? editingLink.name : newLink.name}
-                    onChange={(e) => editingLink 
-                      ? setEditingLink({...editingLink, name: e.target.value})
-                      : setNewLink({...newLink, name: e.target.value})}
-                    className="w-full border border-zinc-700 bg-zinc-800 text-white rounded p-2 focus:border-blue-500 focus:outline-none"
-                    placeholder="Link name"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">Path</label>
-                  <input
-                    type="text"
-                    value={editingLink ? editingLink.path : newLink.path}
-                    onChange={(e) => editingLink 
-                      ? setEditingLink({...editingLink, path: e.target.value})
-                      : setNewLink({...newLink, path: e.target.value})}
-                    className="w-full border border-zinc-700 bg-zinc-800 text-white rounded p-2 focus:border-blue-500 focus:outline-none"
-                    placeholder="/path"
-                  />
-                </div>
-              </div>
-              <div className="flex space-x-3">
-                {editingLink ? (
-                  <>
-                    <button
-                      onClick={handleUpdateLink}
-                      className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                    >
-                      Update Link
-                    </button>
-                    <button
-                      onClick={() => setEditingLink(null)}
-                      className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
-                    >
-                      Cancel
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    onClick={handleAddLink}
-                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                  >
-                    Add Link
-                  </button>
-                )}
-                <button
-                  onClick={handleClearAllLinks}
-                  className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
-                >
-                  Clear All Links
-                </button>
-              </div>
-            </div>
+          <div className="mb-8 p-6 border border-dashed border-[#403fbb] rounded-lg bg-gray-50">
+            <h2 className="text-xl font-semibold mb-4 text-gray-800">Navigation Links Management</h2>
 
             {/* Add Multiple Links Section */}
             <div className="mt-6">
-              <h3 className="text-lg font-medium mb-3 text-white">Add Multiple Links (JSON)</h3>
+              <h3 className="text-lg font-medium mb-3 text-gray-800">Add Multiple Links (JSON)</h3>
               <textarea
                 value={multipleLinks}
                 onChange={(e) => setMultipleLinks(e.target.value)}
-                className="w-full h-32 border border-zinc-700 bg-zinc-800 text-white rounded p-2 focus:border-blue-500 focus:outline-none mb-2 font-mono text-sm"
+                className="w-full h-32 border border-gray-300 bg-white text-gray-800 rounded p-2 focus:border-[#403fbb] focus:outline-none mb-2 font-mono text-sm"
                 placeholder={`[\n  { "name": "About Us", "path": "/about" },\n  { "name": "Security", "path": "/security" },\n  { "name": "Help", "path": "/help" }\n]`}
               />
               <div className="flex space-x-3">
                 <button
                   onClick={handleAddMultipleLinks}
-                  className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors"
+                  className="px-4 py-2 bg-[#403fbb] text-white rounded hover:bg-[#5756c5] transition-colors"
                 >
                   Add Multiple Links
                 </button>
@@ -457,48 +414,48 @@ const Dashboard = () => {
   { "name": "Security", "path": "/security" },
   { "name": "Help", "path": "/help" }
 ]`)}
-                  className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
+                  className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
                 >
                   Load Example
                 </button>
               </div>
-              <p className="mt-2 text-sm text-gray-400">
+              <p className="mt-2 text-sm text-gray-600">
                 Enter an array of link objects in JSON format
               </p>
             </div>
 
             {/* Navigation Links List */}
             <div className="mt-6">
-              <h3 className="text-lg font-medium mb-3 text-white">Current Navigation Links</h3>
+              <h3 className="text-lg font-medium mb-3 text-gray-800">Current Navigation Links</h3>
               {navLinksLoading ? (
-                <p className="text-gray-400">Loading navigation links...</p>
+                <p className="text-gray-500">Loading navigation links...</p>
               ) : navLinks.length === 0 ? (
-                <p className="text-gray-400">No navigation links configured</p>
+                <p className="text-gray-500">No navigation links configured</p>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-zinc-700">
-                    <thead>
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-100">
                       <tr>
-                        <th className="px-4 py-2 text-left text-sm font-medium text-gray-300">Name</th>
-                        <th className="px-4 py-2 text-left text-sm font-medium text-gray-300">Path</th>
-                        <th className="px-4 py-2 text-left text-sm font-medium text-gray-300">Actions</th>
+                        <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Name</th>
+                        <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Path</th>
+                        <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Actions</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-zinc-800">
+                    <tbody className="divide-y divide-gray-200">
                       {navLinks.map((link, index) => (
-                        <tr key={index}>
-                          <td className="px-4 py-2 text-sm text-white">{link.name}</td>
-                          <td className="px-4 py-2 text-sm text-blue-300">{link.path}</td>
+                        <tr key={index} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                          <td className="px-4 py-2 text-sm text-gray-800">{link.name}</td>
+                          <td className="px-4 py-2 text-sm text-[#403fbb]">{link.path}</td>
                           <td className="px-4 py-2 text-sm">
                             <button
-                              onClick={() => setEditingLink({...link})}
-                              className="mr-2 text-blue-400 hover:text-blue-300"
+                              onClick={() => openEditModal(link)}
+                              className="mr-2 text-[#403fbb] hover:text-[#5756c5]"
                             >
                               Edit
                             </button>
                             <button
                               onClick={() => handleDeleteLink(link._id)}
-                              className="text-red-400 hover:text-red-300"
+                              className="text-red-500 hover:text-red-600"
                             >
                               Delete
                             </button>
@@ -509,37 +466,37 @@ const Dashboard = () => {
                   </table>
                 </div>
               )}
+              <div className="mt-4">
+                <button
+                  onClick={handleClearAllLinks}
+                  className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
+                >
+                  Clear All Links
+                </button>
+              </div>
             </div>
           </div>
 
           <div className="flex justify-between items-center mb-6">
-            <h1 className="text-2xl font-bold text-white">Newspaper Management Dashboard</h1>
-            {/* <button
-              onClick={handleLogout}
-              className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors"
+            <h1 className="text-2xl font-bold text-gray-800">Newspaper Management Dashboard</h1>
+            <button
+              onClick={() => {
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                navigate('/login');
+              }}
+              className="px-4 py-2 bg-[#403fbb] text-white rounded hover:bg-[#5756c5] focus:outline-none focus:ring-2 focus:ring-[#403fbb] transition-colors"
             >
               Logout
-            </button> */}
+            </button>
           </div>
-
-          {/* Alert messages */}
-          {error && (
-            <div className="mb-4 bg-red-900/50 border-l-4 border-red-600 text-red-300 p-4 rounded">
-              <p>{error}</p>
-            </div>
-          )}
-          {success && (
-            <div className="mb-4 bg-green-900/50 border-l-4 border-green-600 text-green-300 p-4 rounded">
-              <p>{success}</p>
-            </div>
-          )}
 
           {/* Navigation and Date Selection */}
           <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center space-x-2">
               <button
                 onClick={() => fetchNewspaper(1)}
-                className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+                className="px-3 py-1 bg-[#403fbb] text-white rounded hover:bg-[#5756c5] transition-colors"
               >
                 Latest
               </button>
@@ -549,7 +506,7 @@ const Dashboard = () => {
                 onChange={handleDateSelect}
                 dateFormat="yyyy-MM-dd"
                 placeholderText="Select a date"
-                className="border border-zinc-700 bg-zinc-800 text-white rounded p-2 focus:border-red-500 focus:outline-none"
+                className="border border-gray-300 bg-white text-gray-800 rounded p-2 focus:border-[#403fbb] focus:outline-none"
                 maxDate={new Date()}
                 highlightDates={availableDates.map(d => new Date(d.date))}
               />
@@ -560,19 +517,19 @@ const Dashboard = () => {
                 <button
                   onClick={() => fetchNewspaper(pagination.currentPage - 1)}
                   disabled={!pagination.hasPreviousPage}
-                  className={`px-3 py-1 rounded ${pagination.hasPreviousPage ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-zinc-700 text-zinc-400 cursor-not-allowed'} transition-colors`}
+                  className={`px-3 py-1 rounded ${pagination.hasPreviousPage ? 'bg-[#403fbb] text-white hover:bg-[#5756c5]' : 'bg-gray-200 text-gray-500 cursor-not-allowed'} transition-colors`}
                 >
                   Previous
                 </button>
                 
-                <span className="px-3 py-1 bg-zinc-800 text-white rounded">
+                <span className="px-3 py-1 bg-gray-100 text-gray-800 rounded">
                   Page {pagination.currentPage} of {pagination.totalPages}
                 </span>
                 
                 <button
                   onClick={() => fetchNewspaper(pagination.currentPage + 1)}
                   disabled={!pagination.hasNextPage}
-                  className={`px-3 py-1 rounded ${pagination.hasNextPage ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-zinc-700 text-zinc-400 cursor-not-allowed'} transition-colors`}
+                  className={`px-3 py-1 rounded ${pagination.hasNextPage ? 'bg-[#403fbb] text-white hover:bg-[#5756c5]' : 'bg-gray-200 text-gray-500 cursor-not-allowed'} transition-colors`}
                 >
                   Next
                 </button>
@@ -581,12 +538,12 @@ const Dashboard = () => {
           </div>
 
           {/* Upload section */}
-          <div className="mb-8 p-6 border border-dashed border-red-600 rounded-lg bg-zinc-800">
-            <h2 className="text-xl font-semibold mb-4 text-white">Upload New Newspaper PDF</h2>
+          <div className="mb-8 p-6 border border-dashed border-[#403fbb] rounded-lg bg-gray-50">
+            <h2 className="text-xl font-semibold mb-4 text-gray-800">Upload New Newspaper PDF</h2>
             <div className="flex items-center">
               <label
                 htmlFor="pdf-upload"
-                className={`cursor-pointer px-4 py-2 text-white rounded focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors ${uploadLoading ? 'bg-red-700' : 'bg-red-600 hover:bg-red-700'}`}
+                className={`cursor-pointer px-4 py-2 text-white rounded focus:outline-none focus:ring-2 focus:ring-[#403fbb] transition-colors ${uploadLoading ? 'bg-[#5756c5]' : 'bg-[#403fbb] hover:bg-[#5756c5]'}`}
               >
                 {uploadLoading ? 'Uploading...' : 'Select PDF'}
               </label>
@@ -598,7 +555,7 @@ const Dashboard = () => {
                 className="hidden"
                 disabled={uploadLoading}
               />
-              <span className="ml-3 text-sm text-gray-400">
+              <span className="ml-3 text-sm text-gray-600">
                 {uploadLoading ? 'Please wait...' : 'Choose a PDF file to upload'}
               </span>
             </div>
@@ -606,51 +563,51 @@ const Dashboard = () => {
 
           {/* Newspaper Details */}
           <div>
-            <h2 className="text-xl font-semibold mb-4 text-white">
+            <h2 className="text-xl font-semibold mb-4 text-gray-800">
               {selectedDate ? `Newspaper for ${formatDate(selectedDate)}` : 'Newspaper Details'}
             </h2>
             
             {loading ? (
-              <div className="text-center py-4 text-gray-400">
+              <div className="text-center py-4 text-gray-500">
                 <p>Loading newspaper data...</p>
               </div>
             ) : !newspaper ? (
-              <div className="text-center py-4 text-gray-400">
+              <div className="text-center py-4 text-gray-500">
                 <p>No newspaper found</p>
               </div>
             ) : (
               <div>
-                <div className="mb-6 p-4 bg-zinc-800 rounded-lg">
+                <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
                   <div className="grid grid-cols-2 gap-4 mb-4">
                     <div>
-                      <p className="text-sm text-gray-400">Created At</p>
-                      <p className="font-medium text-white">{formatDate(newspaper.createdAt)}</p>
+                      <p className="text-sm text-gray-600">Created At</p>
+                      <p className="font-medium text-gray-800">{formatDate(newspaper.createdAt)}</p>
                     </div>
                     <div>
-                      <p className="text-sm text-gray-400">Total Pages</p>
-                      <p className="font-medium text-white">{newspaper.totalpages}</p>
+                      <p className="text-sm text-gray-600">Total Pages</p>
+                      <p className="font-medium text-gray-800">{newspaper.totalpages}</p>
                     </div>
                   </div>
                   
                   <button
                     onClick={() => handleDelete(newspaper._id)}
-                    className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors"
+                    className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors"
                   >
                     Delete Newspaper
                   </button>
                 </div>
 
-                <h3 className="text-lg font-semibold mb-3 text-white">Newspaper Pages</h3>
+                <h3 className="text-lg font-semibold mb-3 text-gray-800">Newspaper Pages</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {newspaper.newspaperLinks.map((link, index) => (
-                    <div key={index} className="border border-zinc-700 rounded-lg overflow-hidden shadow-sm bg-zinc-800">
+                    <div key={index} className="border border-gray-200 rounded-lg overflow-hidden shadow-sm bg-white">
                       <img 
                         src={link} 
                         alt={`Newspaper Page ${index + 1}`}
                         className="w-full h-auto object-contain"
                       />
-                      <div className="p-2 bg-zinc-900 text-center">
-                        <p className="text-sm text-gray-300">Page {index + 1}</p>
+                      <div className="p-2 bg-gray-50 text-center">
+                        <p className="text-sm text-gray-600">Page {index + 1}</p>
                       </div>
                     </div>
                   ))}
@@ -658,7 +615,6 @@ const Dashboard = () => {
               </div>
             )}
           </div>
-        
         </div>
       </div>
     </div>

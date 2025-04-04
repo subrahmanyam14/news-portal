@@ -60,12 +60,27 @@ const getNavLinks = async (req, res) => {
 // UPDATE - Replace all navigation links
 const updateNavLinks = async (req, res) => {
   try {
-    const { newLinksArray } = req.body;
+    const { linkId, updatedLink } = req.body;
+    
+    if (!linkId || !updatedLink || !updatedLink.name || !updatedLink.path) {
+      return res.status(400).json({ error: 'Missing required fields: linkId and updatedLink (with name and path)' });
+    }
+
     const updated = await NavLinks.findOneAndUpdate(
-      {}, 
-      { $set: { links: newLinksArray } },
-      { new: true, upsert: true }
+      { 'links._id': linkId },
+      {
+        $set: {
+          'links.$.name': updatedLink.name,
+          'links.$.path': updatedLink.path
+        }
+      },
+      { new: true }
     );
+
+    if (!updated) {
+      return res.status(404).json({ error: 'Link not found' });
+    }
+
     res.status(200).json(updated.links);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -90,10 +105,10 @@ const addSingleNavLink = async (req, res) => {
 // DELETE - Remove a specific link by name or path
 const deleteNavLink = async (req, res) => {
   try {
-    const { identifier } = req.params;
+    const { id } = req.params;
     const updated = await NavLinks.findOneAndUpdate(
       {},
-      { $pull: { links: { $or: [{ name: identifier }, { path: identifier }] } } },
+      { $pull: { links: { $or: [ { _id: id } ] } } },
       { new: true }
     );
     const links = updated ? updated.links : [];
