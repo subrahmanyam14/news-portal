@@ -10,20 +10,50 @@ export default function ImageViewer() {
   const [downloading, setDownloading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  
+    // Helper function to format date as YYYY-MM-DD
+    const formatDate = (date) => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+  // Set initial date to today (correctly handles timezone)
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayDateStr = formatDate(today);
+  const [selectedDate, setSelectedDate] = useState(todayDateStr);
+  
   const [availableDates, setAvailableDates] = useState([]);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [currentMonthYear, setCurrentMonthYear] = useState({
-    month: new Date().getMonth() + 1,
-    year: new Date().getFullYear()
+    month: today.getMonth() + 1,
+    year: today.getFullYear()
   });
+
+
+
+  // Function to check if a date is in the future
+  const isFutureDate = (date) => {
+    const checkDate = new Date(date);
+    checkDate.setHours(0, 0, 0, 0);
+    return checkDate > today;
+  };
 
   // Fetch available dates for the current month
   useEffect(() => {
     const fetchAvailableDates = async () => {
       try {
-        const response = await axios.get(`http://localhost:5002/newspaper/dates?month=${currentMonthYear.month.toString().padStart(2, '0')}&year=${currentMonthYear.year}`);
-        setAvailableDates(response.data.data);
+        const response = await axios.get(
+          `http://localhost:5002/newspaper/dates?month=${currentMonthYear.month
+            .toString()
+            .padStart(2, '0')}&year=${currentMonthYear.year}`
+        );
+        // Filter out future dates from available dates
+        const filteredDates = response.data.data.filter(dateObj => 
+          !isFutureDate(dateObj.date)
+        );
+        setAvailableDates(filteredDates);
       } catch (err) {
         console.error("Error fetching available dates:", err);
       }
@@ -31,14 +61,14 @@ export default function ImageViewer() {
     fetchAvailableDates();
   }, [currentMonthYear]);
 
-  // // Fetch newspaper data when selectedDate changes
+  // Fetch newspaper data when selectedDate changes
   useEffect(() => {
     const fetchNewspaper = async () => {
       setLoading(true);
       setError(null);
       try {
         let url;
-        if (selectedDate === new Date().toISOString().split('T')[0]) {
+        if (selectedDate === todayDateStr) {
           url = 'http://localhost:5002/newspaper';
         } else {
           url = `http://localhost:5002/newspaper/date?date=${selectedDate}`;
@@ -88,7 +118,7 @@ export default function ImageViewer() {
           };
           image.onerror = () => {
             console.error(`Failed to load image: ${img.src}`);
-            resolve(); // Continue even if one image fails
+            resolve();
           };
         });
       }
@@ -112,6 +142,7 @@ export default function ImageViewer() {
   };
 
   const handleDateChange = (date) => {
+    if (isFutureDate(date)) return;
     setSelectedDate(date);
     setShowDatePicker(false);
   };
@@ -127,6 +158,16 @@ export default function ImageViewer() {
       } else if (newMonth < 1) {
         newMonth = 12;
         newYear--;
+      }
+
+      // Don't allow navigating to future months/years
+      const newDate = new Date(newYear, newMonth - 1, 1);
+      newDate.setHours(0, 0, 0, 0);
+      if (newDate > today) {
+        return {
+          month: today.getMonth() + 1,
+          year: today.getFullYear()
+        };
       }
 
       return { month: newMonth, year: newYear };
@@ -149,14 +190,33 @@ export default function ImageViewer() {
           {showDatePicker && (
             <div className="absolute top-full left-0 mt-2 bg-gray-700 p-4 rounded shadow-lg z-50 w-64">
               <div className="flex justify-between items-center mb-2">
-                <button onClick={() => changeMonthYear(-1)}>&lt;</button>
-                <span>{new Date(currentMonthYear.year, currentMonthYear.month - 1).toLocaleString('default', { month: 'long', year: 'numeric' })}</span>
-                <button onClick={() => changeMonthYear(1)}>&gt;</button>
+                <button 
+                  onClick={() => changeMonthYear(-1)}
+                  className="hover:bg-gray-600 p-1 rounded"
+                >
+                  &lt;
+                </button>
+                <span className="font-medium">
+                  {new Date(currentMonthYear.year, currentMonthYear.month - 1).toLocaleString('default', { month: 'long', year: 'numeric' })}
+                </span>
+                <button 
+                  onClick={() => {
+                    const currentDate = new Date(currentMonthYear.year, currentMonthYear.month - 1, 1);
+                    currentDate.setHours(0, 0, 0, 0);
+                    if (currentDate < today) {
+                      changeMonthYear(1);
+                    }
+                  }}
+                  className={`p-1 rounded ${new Date(currentMonthYear.year, currentMonthYear.month - 1, 1) >= today ? 'text-gray-500 cursor-not-allowed' : 'hover:bg-gray-600'}`}
+                  disabled={new Date(currentMonthYear.year, currentMonthYear.month - 1, 1) >= today}
+                >
+                  &gt;
+                </button>
               </div>
 
               <div className="grid grid-cols-7 gap-1 text-center text-sm">
                 {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(day => (
-                  <div key={day} className="p-1">{day}</div>
+                  <div key={day} className="p-1 font-medium">{day}</div>
                 ))}
 
                 {Array.from({ length: new Date(currentMonthYear.year, currentMonthYear.month - 1, 0).getDay() + 1 }).map((_, i) => (
@@ -164,19 +224,28 @@ export default function ImageViewer() {
                 ))}
 
                 {Array.from({ length: new Date(currentMonthYear.year, currentMonthYear.month, 0).getDate() }, (_, i) => {
-                  const date = new Date(currentMonthYear.year, currentMonthYear.month - 1, i + 1);
-                  const dateStr = date.toISOString().split('T')[0];
+                  const day = i + 1;
+                  const date = new Date(currentMonthYear.year, currentMonthYear.month - 1, day);
+                  const dateStr = formatDate(date);
+                  const isToday = dateStr === todayDateStr;
                   const isAvailable = availableDates.some(d => d.date === dateStr);
                   const isSelected = selectedDate === dateStr;
+                  const isFuture = isFutureDate(dateStr);
 
                   return (
                     <button
-                      key={i}
-                      className={`p-1 rounded ${isSelected ? 'bg-blue-500' : isAvailable ? 'bg-gray-600 hover:bg-gray-500' : 'text-gray-500'}`}
-                      onClick={() => isAvailable && handleDateChange(dateStr)}
-                      disabled={!isAvailable}
+                      key={day}
+                      className={`p-1 rounded ${
+                        isToday ? 'border border-yellow-400 bg-gray-600' : 
+                        isSelected ? 'bg-blue-500' : 
+                        isAvailable ? 'bg-gray-600 hover:bg-gray-500' : 
+                        isFuture ? 'text-gray-400 cursor-not-allowed' : 'text-gray-500'
+                      }`}
+                      onClick={() => !isFuture && isAvailable && handleDateChange(dateStr)}
+                      disabled={isFuture || !isAvailable}
                     >
-                      {i + 1}
+                      {day}
+                      {isToday && <span className="sr-only">(Today)</span>}
                     </button>
                   );
                 })}
@@ -200,25 +269,37 @@ export default function ImageViewer() {
 
             <div className="flex space-x-1 md:space-x-2 items-center text-sm md:text-base">
               {activeImage?.id > 3 && (
-                <button className="px-1" onClick={() => setActiveImage(images[activeImage.id - 4])}>◁</button>
+                <button 
+                  className="px-1 hover:bg-gray-700 rounded" 
+                  onClick={() => setActiveImage(images[activeImage.id - 4])}
+                >
+                  ◁
+                </button>
               )}
               {images.slice(activeImage.id - 1, activeImage.id + 2).map((img) => (
                 <button
                   key={img.id}
-                  className={`px-2 md:px-3 py-1 rounded ${img.id === activeImage.id ? "bg-blue-500" : "bg-gray-600"}`}
+                  className={`px-2 md:px-3 py-1 rounded ${
+                    img.id === activeImage.id ? "bg-blue-500" : "bg-gray-600 hover:bg-gray-500"
+                  }`}
                   onClick={() => setActiveImage(img)}
                 >
                   {img.id}
                 </button>
               ))}
               {activeImage.id + 3 <= images.length && (
-                <button className="px-1" onClick={() => setActiveImage(images[activeImage.id + 2])}>▷</button>
+                <button 
+                  className="px-1 hover:bg-gray-700 rounded" 
+                  onClick={() => setActiveImage(images[activeImage.id + 2])}
+                >
+                  ▷
+                </button>
               )}
             </div>
           </>
         )}
         <button
-          className="bg-green-500 px-2 md:px-4 py-2 rounded flex items-center relative"
+          className="bg-green-500 px-2 md:px-4 py-2 rounded flex items-center relative hover:bg-green-600 transition-colors"
           onClick={downloadPDF}
           disabled={downloading || !images.length}
         >
@@ -243,7 +324,7 @@ export default function ImageViewer() {
                 key={img.id}
                 src={img.src}
                 alt={`Page ${img.id}`}
-                className={`cursor-pointer border-4 ${img.id === activeImage?.id ? "border-blue-500" : "border-gray-300"}`}
+                className={`cursor-pointer border-4 ${img.id === activeImage?.id ? "border-blue-500" : "border-gray-300 hover:border-gray-400"}`}
                 onClick={() => setActiveImage(img)}
               />
             ))}
@@ -268,7 +349,7 @@ export default function ImageViewer() {
           ) : (
             <>
               <button
-                className="absolute left-2 top-1/2 transform -translate-y-1/2 bg-gray-700 p-2 rounded-full text-white"
+                className="absolute left-2 top-1/2 transform -translate-y-1/2 bg-gray-700 p-2 rounded-full text-white hover:bg-gray-600 disabled:opacity-50"
                 onClick={prevImage}
                 disabled={images.length <= 1}
               >
@@ -278,12 +359,12 @@ export default function ImageViewer() {
               <img
                 src={activeImage.src}
                 alt={`Page ${activeImage.id}`}
-                className="shadow-lg border-2 border-gray-400 cursor-zoom-in"
+                className="shadow-lg border-2 border-gray-400 cursor-zoom-in max-h-[90vh] object-contain"
                 onClick={() => setIsZoomed(true)}
               />
 
               <button
-                className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-gray-700 p-2 rounded-full text-white"
+                className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-gray-700 p-2 rounded-full text-white hover:bg-gray-600 disabled:opacity-50"
                 onClick={nextImage}
                 disabled={images.length <= 1}
               >
@@ -299,19 +380,17 @@ export default function ImageViewer() {
         <div className="fixed inset-0 bg-black bg-opacity-80 flex justify-center items-center p-4 z-50">
           <div className="relative w-full h-full max-w-4xl max-h-[90vh] border-4 border-white">
             <button
-              className="absolute top-4 right-4 bg-red-500 text-white px-4 py-2 rounded-lg"
+              className="absolute top-4 right-4 bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600"
               onClick={() => setIsZoomed(false)}
             >
               X
             </button>
             <div className="overflow-auto w-full h-full">
-              <div className="w-[1600px] h-[2260px]">
-                <img
-                  src={activeImage.src}
-                  alt="Zoomed Image"
-                  className="w-full h-full object-contain"
-                />
-              </div>
+              <img
+                src={activeImage.src}
+                alt="Zoomed Image"
+                className="w-full h-full object-contain"
+              />
             </div>
           </div>
         </div>
