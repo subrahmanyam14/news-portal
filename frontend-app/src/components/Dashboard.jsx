@@ -19,6 +19,12 @@ const Dashboard = () => {
   const [navLinksLoading, setNavLinksLoading] = useState(false);
   const [multipleLinks, setMultipleLinks] = useState('');
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  // Publication date now allows future dates
+  const [publicationDate, setPublicationDate] = useState(new Date());
+  const [isPublished, setIsPublished] = useState(true);
+  const [selectedFile, setSelectedFile] = useState(null);
+  // State to track if we're showing future publications
+  const [includeFuture, setIncludeFuture] = useState(false);
   const navigate = useNavigate();
 
   // Check if user is authenticated
@@ -27,18 +33,23 @@ const Dashboard = () => {
     if (!token) {
       navigate('/login');
     } else {
-      fetchNewspaper();
-      fetchAvailableDates();
+      fetchNewspaper(1, includeFuture);
       fetchNavLinks();
     }
   }, [navigate]);
 
+  // Effect to refetch data when includeFuture changes
+  useEffect(() => {
+    fetchNewspaper(1, includeFuture);
+    fetchAvailableDates(includeFuture);
+  }, [includeFuture]);
+
   // Fetch newspaper data with pagination
-  const fetchNewspaper = async (page = 1) => {
+  const fetchNewspaper = async (page = 1, showFuture = includeFuture) => {
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}/newspaper/page?page=${page}`, {
+      const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}/newspaper/future?page=${page}&includeFuture=${showFuture}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -75,14 +86,14 @@ const Dashboard = () => {
   };
 
   // Fetch available dates
-  const fetchAvailableDates = async () => {
+  const fetchAvailableDates = async (showFuture = includeFuture) => {
     try {
       const token = localStorage.getItem('token');
       const today = new Date();
       const month = String(today.getMonth() + 1).padStart(2, '0');
       const year = today.getFullYear();
       
-      const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}/newspaper/dates?month=${month}&year=${year}`, {
+      const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}/newspaper/dates?month=${month}&year=${year}&includeFuture=${showFuture}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -95,15 +106,25 @@ const Dashboard = () => {
     }
   };
 
-  // Handle file upload
-  const handleFileUpload = async (e) => {
-    e.preventDefault();
+  // Handle file selection
+  const handleFileSelect = (e) => {
     const file = e.target.files[0];
     
     if (!file) return;
     
     if (file.type !== 'application/pdf') {
       toast.error('Only PDF files are allowed');
+      e.target.value = '';
+      return;
+    }
+
+    setSelectedFile(file);
+  };
+
+  // Handle file upload with publication date and publish status
+  const handleUpload = async () => {
+    if (!selectedFile) {
+      toast.error('Please select a PDF file first');
       return;
     }
 
@@ -111,7 +132,14 @@ const Dashboard = () => {
     
     try {
       const formData = new FormData();
-      formData.append('pdf', file);
+      formData.append('pdf', selectedFile);
+      
+      // Add publication date in ISO format
+      const formattedDate = publicationDate.toISOString();
+      formData.append('publicationDate', formattedDate);
+      
+      // Add publish status
+      formData.append('isPublished', isPublished);
       
       const token = localStorage.getItem('token');
       await axios.post(`${process.env.REACT_APP_BACKEND_URL}/newspaper/upload`, formData, {
@@ -122,13 +150,22 @@ const Dashboard = () => {
       });
 
       toast.success('PDF uploaded successfully');
-      fetchNewspaper();
-      fetchAvailableDates();
+      fetchNewspaper(1, includeFuture);
+      fetchAvailableDates(includeFuture);
+      
+      // Reset form after successful upload
+      setSelectedFile(null);
+      setPublicationDate(new Date());
+      setIsPublished(true);
+      
+      // Reset file input
+      const fileInput = document.getElementById('pdf-upload');
+      if (fileInput) fileInput.value = '';
+      
     } catch (err) {
       toast.error(err.response?.data?.message || err.message || 'An error occurred during upload');
     } finally {
       setUploadLoading(false);
-      e.target.value = '';
     }
   };
 
@@ -148,8 +185,8 @@ const Dashboard = () => {
 
       toast.success('Newspaper deleted successfully');
       setNewspaper(null);
-      fetchNewspaper();
-      fetchAvailableDates();
+      fetchNewspaper(1, includeFuture);
+      fetchAvailableDates(includeFuture);
     } catch (err) {
       toast.error(err.response?.data?.message || err.message || 'Failed to delete newspaper');
     }
@@ -163,6 +200,12 @@ const Dashboard = () => {
     const formattedDate = nextDay.toISOString().split('T')[0];
     setSelectedDate(date);
     fetchNewspaperByDate(formattedDate);
+  };
+
+  // Toggle future publications
+  const toggleFuturePublications = () => {
+    setIncludeFuture(prevState => !prevState);
+    // Fetch is handled by useEffect when includeFuture changes
   };
 
   // Format date safely
@@ -313,6 +356,16 @@ const Dashboard = () => {
     } catch (err) {
       toast.error(err.response?.data?.message || err.message || 'Failed to clear navigation links');
     }
+  };
+
+  // Toggle publication status
+  const handlePublishStatusChange = (status) => {
+    setIsPublished(status);
+  };
+
+  // Handle pagination
+  const handlePageChange = (page) => {
+    fetchNewspaper(page, includeFuture);
   };
 
   // Edit Link Modal Component
@@ -479,23 +532,103 @@ const Dashboard = () => {
 
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-2xl font-bold text-gray-800">Newspaper Management Dashboard</h1>
-            <button
-              onClick={() => {
-                localStorage.removeItem('token');
-                localStorage.removeItem('user');
-                navigate('/login');
-              }}
-              className="px-4 py-2 bg-[#403fbb] text-white rounded hover:bg-[#5756c5] focus:outline-none focus:ring-2 focus:ring-[#403fbb] transition-colors"
-            >
-              Logout
-            </button>
+          </div>
+
+          
+
+          {/* Upload section with publication date and publish status */}
+          <div className="mb-8 p-6 border border-dashed border-[#403fbb] rounded-lg bg-gray-50">
+            <h2 className="text-xl font-semibold mb-4 text-gray-800">Upload New Newspaper PDF</h2>
+            
+            <div className="space-y-4">
+              {/* File Selection */}
+              <div className="flex items-center">
+                <label
+                  htmlFor="pdf-upload"
+                  className="cursor-pointer px-4 py-2 bg-[#403fbb] text-white rounded hover:bg-[#5756c5] focus:outline-none focus:ring-2 focus:ring-[#403fbb] transition-colors"
+                >
+                  Select PDF
+                </label>
+                <input
+                  id="pdf-upload"
+                  type="file"
+                  accept="application/pdf"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                  disabled={uploadLoading}
+                />
+                <span className="ml-3 text-sm text-gray-600">
+                  {selectedFile ? selectedFile.name : 'Choose a PDF file to upload'}
+                </span>
+              </div>
+              
+              {/* Publication Date Selection - No maxDate restriction */}
+              <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Publication Date</label>
+                  <DatePicker
+                    selected={publicationDate}
+                    onChange={(date) => setPublicationDate(date)}
+                    dateFormat="yyyy-MM-dd"
+                    className="border border-gray-300 bg-white text-gray-800 rounded p-2 focus:border-[#403fbb] focus:outline-none"
+                    // Removed maxDate to allow future publication dates
+                  />
+                  {publicationDate && publicationDate > new Date() && (
+                    <p className="text-sm text-blue-600 mt-1">
+                      This will be scheduled for future publication
+                    </p>
+                  )}
+                </div>
+                
+                {/* Publish Status */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Publication Status</label>
+                  <div className="flex space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => handlePublishStatusChange(true)}
+                      className={`px-3 py-1 rounded ${isPublished ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-700'}`}
+                    >
+                      Published
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handlePublishStatusChange(false)}
+                      className={`px-3 py-1 rounded ${!isPublished ? 'bg-yellow-500 text-white' : 'bg-gray-200 text-gray-700'}`}
+                    >
+                      Draft
+                    </button>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Upload Button */}
+              <div className="pt-2">
+                <button
+                  onClick={handleUpload}
+                  disabled={!selectedFile || uploadLoading}
+                  className={`px-4 py-2 rounded focus:outline-none focus:ring-2 focus:ring-[#403fbb] transition-colors ${
+                    !selectedFile || uploadLoading 
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                      : 'bg-[#403fbb] text-white hover:bg-[#5756c5]'
+                  }`}
+                >
+                  {uploadLoading ? 'Uploading...' : 'Upload Newspaper'}
+                </button>
+                {uploadLoading && (
+                  <span className="ml-3 text-sm text-gray-600">
+                    Please wait, uploading your file...
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Navigation and Date Selection */}
           <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center space-x-2">
               <button
-                onClick={() => fetchNewspaper(1)}
+                onClick={() => fetchNewspaper(1, includeFuture)}
                 className="px-3 py-1 bg-[#403fbb] text-white rounded hover:bg-[#5756c5] transition-colors"
               >
                 Latest
@@ -507,15 +640,27 @@ const Dashboard = () => {
                 dateFormat="yyyy-MM-dd"
                 placeholderText="Select a date"
                 className="border border-gray-300 bg-white text-gray-800 rounded p-2 focus:border-[#403fbb] focus:outline-none"
-                maxDate={new Date()}
+                // Removed maxDate to allow selection of future dates
                 highlightDates={availableDates.map(d => new Date(d.date))}
               />
+              
+              {/* Toggle for showing/hiding future publications */}
+              <button
+                onClick={toggleFuturePublications}
+                className={`px-3 py-1 rounded ${
+                  includeFuture 
+                    ? 'bg-[#403fbb] text-white' 
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                } transition-colors`}
+              >
+                {includeFuture ? 'Hide Future' : 'Show Future'}
+              </button>
             </div>
 
             {pagination.totalPages > 1 && (
               <div className="flex items-center space-x-2">
                 <button
-                  onClick={() => fetchNewspaper(pagination.currentPage - 1)}
+                  onClick={() => handlePageChange(pagination.currentPage - 1)}
                   disabled={!pagination.hasPreviousPage}
                   className={`px-3 py-1 rounded ${pagination.hasPreviousPage ? 'bg-[#403fbb] text-white hover:bg-[#5756c5]' : 'bg-gray-200 text-gray-500 cursor-not-allowed'} transition-colors`}
                 >
@@ -527,7 +672,7 @@ const Dashboard = () => {
                 </span>
                 
                 <button
-                  onClick={() => fetchNewspaper(pagination.currentPage + 1)}
+                  onClick={() => handlePageChange(pagination.currentPage + 1)}
                   disabled={!pagination.hasNextPage}
                   className={`px-3 py-1 rounded ${pagination.hasNextPage ? 'bg-[#403fbb] text-white hover:bg-[#5756c5]' : 'bg-gray-200 text-gray-500 cursor-not-allowed'} transition-colors`}
                 >
@@ -537,34 +682,11 @@ const Dashboard = () => {
             )}
           </div>
 
-          {/* Upload section */}
-          <div className="mb-8 p-6 border border-dashed border-[#403fbb] rounded-lg bg-gray-50">
-            <h2 className="text-xl font-semibold mb-4 text-gray-800">Upload New Newspaper PDF</h2>
-            <div className="flex items-center">
-              <label
-                htmlFor="pdf-upload"
-                className={`cursor-pointer px-4 py-2 text-white rounded focus:outline-none focus:ring-2 focus:ring-[#403fbb] transition-colors ${uploadLoading ? 'bg-[#5756c5]' : 'bg-[#403fbb] hover:bg-[#5756c5]'}`}
-              >
-                {uploadLoading ? 'Uploading...' : 'Select PDF'}
-              </label>
-              <input
-                id="pdf-upload"
-                type="file"
-                accept="application/pdf"
-                onChange={handleFileUpload}
-                className="hidden"
-                disabled={uploadLoading}
-              />
-              <span className="ml-3 text-sm text-gray-600">
-                {uploadLoading ? 'Please wait...' : 'Choose a PDF file to upload'}
-              </span>
-            </div>
-          </div>
-
           {/* Newspaper Details */}
           <div>
             <h2 className="text-xl font-semibold mb-4 text-gray-800">
               {selectedDate ? `Newspaper for ${formatDate(selectedDate)}` : 'Newspaper Details'}
+              {includeFuture && !selectedDate && <span className="ml-2 text-sm text-blue-600">(Including future publications)</span>}
             </h2>
             
             {loading ? (
@@ -578,10 +700,24 @@ const Dashboard = () => {
             ) : (
               <div>
                 <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                  <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                     <div>
                       <p className="text-sm text-gray-600">Created At</p>
                       <p className="font-medium text-gray-800">{formatDate(newspaper.createdAt)}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Publication Date</p>
+                      <p className={`font-medium ${new Date(newspaper.publicationDate || newspaper.createdAt) > new Date() 
+                        ? 'text-blue-600' : 'text-gray-800'}`}>
+                        {formatDate(newspaper.publicationDate || newspaper.createdAt)}
+                        {new Date(newspaper.publicationDate || newspaper.createdAt) > new Date() && " (Future)"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Status</p>
+                      <p className={`font-medium ${newspaper.isPublished ? 'text-green-600' : 'text-yellow-600'}`}>
+                        {newspaper.isPublished ? 'Published' : 'Draft'}
+                      </p>
                     </div>
                     <div>
                       <p className="text-sm text-gray-600">Total Pages</p>

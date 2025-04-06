@@ -159,6 +159,10 @@ const uploadNewspaper = async (req, res) => {
     let publicationDate = req.body.publicationDate || new Date();
     if (typeof publicationDate === 'string') publicationDate = new Date(publicationDate);
 
+    // Set isPublished based on publication date
+    const now = new Date();
+    const isPublished = publicationDate <= now;
+
     console.log('Converting PDF to images...');
     const imagePaths = await convertPDFToImages(pdfPath, PAGES_DIR);
     console.log(`Generated ${imagePaths.length} ultra-HD images from PDF`);
@@ -175,7 +179,8 @@ const uploadNewspaper = async (req, res) => {
       newspaperLinks: imageUrls,
       totalpages: imageUrls.length,
       originalFilename: req.file.originalname,
-      publicationDate: publicationDate
+      publicationDate: publicationDate,
+      isPublished: isPublished
     });
 
     await newspaper.save();
@@ -191,15 +196,14 @@ const uploadNewspaper = async (req, res) => {
         id: newspaper._id,
         title: req.body.title || req.file.originalname,
         pageCount: imageUrls.length,
-        date: publicationDate
+        date: publicationDate,
+        isPublished: isPublished
       }
     });
   } catch (error) {
     console.error('Upload process error:', error);
-
     await unlink(pdfPath).catch(err => console.warn('PDF cleanup error:', err));
     await rm(PAGES_DIR, { recursive: true, force: true }).catch(err => console.warn('Pages dir cleanup error:', err));
-
     return res.status(500).json({
       success: false,
       message: 'Failed to process newspaper upload',
@@ -208,15 +212,18 @@ const uploadNewspaper = async (req, res) => {
   }
 };
 
-
 const getLatestNewspaper = async (req, res) => {
   try {
-    const latestNewspaper = await NewspaperDetails.findOne().sort({ createdAt: -1 });
+    const now = new Date();
+    const latestNewspaper = await NewspaperDetails.findOne({
+      isPublished: true,
+      publicationDate: { $lte: now }
+    }).sort({ publicationDate: -1 });
 
     if (!latestNewspaper) {
       return res.status(404).json({ 
         success: false,
-        message: 'No newspapers available'
+        message: 'No published newspapers available'
       });
     }
 
@@ -234,8 +241,6 @@ const getLatestNewspaper = async (req, res) => {
   }
 };
 
-
-// Get newspaper by specific date
 const getNewspaperByDate = async (req, res) => {
   try {
     const { date } = req.query;
@@ -254,13 +259,14 @@ const getNewspaperByDate = async (req, res) => {
     endDate.setHours(23, 59, 59, 999);
 
     const newspaper = await NewspaperDetails.findOne({
-      createdAt: { $gte: startDate, $lte: endDate }
+      publicationDate: { $gte: startDate, $lte: endDate },
+      isPublished: true
     });
 
     if (!newspaper) {
       return res.status(404).json({ 
         success: false,
-        message: 'No newspaper found for this date' 
+        message: 'No published newspaper found for this date' 
       });
     }
 
@@ -278,28 +284,30 @@ const getNewspaperByDate = async (req, res) => {
   }
 };
 
-// Get available dates (for calendar)
 const getAvailableDates = async (req, res) => {
   try {
     const { month, year } = req.query;
+    const now = new Date();
     
-    let query = {};
+    let query = {
+      isPublished: true,
+      publicationDate: { $lte: now }
+    };
     
     if (month && year) {
       const startDate = new Date(parseInt(year), parseInt(month) - 1, 1);
       const endDate = new Date(parseInt(year), parseInt(month), 0, 23, 59, 59, 999);
       
-      query = {
-        createdAt: { $gte: startDate, $lte: endDate }
-      };
+      query.publicationDate.$gte = startDate;
+      query.publicationDate.$lte = endDate;
     }
     
     const dates = await NewspaperDetails.find(query)
-      .select('createdAt')
-      .sort({ createdAt: 1 });
+      .select('publicationDate')
+      .sort({ publicationDate: 1 });
     
     const formattedDates = dates.map(item => {
-      const date = new Date(item.createdAt);
+      const date = new Date(item.publicationDate);
       return {
         date: date.toISOString().split('T')[0],
         id: item._id
@@ -319,26 +327,35 @@ const getAvailableDates = async (req, res) => {
     });
   }
 };
+
 const getNewspaperByPagination = async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1; // Current page (default: 1)
-    const limit = 1; // Return one newspaper per request
+    const page = parseInt(req.query.page) || 1;
+    const limit = 1;
     const skip = (page - 1) * limit;
+    const now = new Date();
 
-    // Get total count of newspapers for pagination info
-    const totalNewspapers = await NewspaperDetails.countDocuments();
+    // Get total count of published newspapers
+    const totalNewspapers = await NewspaperDetails.countDocuments({
+      isPublished: true,
+      publicationDate: { $lte: now }
+    });
+    
     const totalPages = Math.ceil(totalNewspapers / limit);
 
     // Get the newspaper for the current page
-    const newspaper = await NewspaperDetails.findOne()
-      .sort({ createdAt: -1 }) // Sort by newest first
-      .skip(skip)
-      .limit(limit);
+    const newspaper = await NewspaperDetails.findOne({
+      isPublished: true,
+      publicationDate: { $lte: now }
+    })
+    .sort({ publicationDate: -1 })
+    .skip(skip)
+    .limit(limit);
 
     if (!newspaper) {
       return res.status(404).json({
         success: false,
-        message: 'No newspapers found',
+        message: 'No published newspapers found',
       });
     }
 
@@ -359,6 +376,67 @@ const getNewspaperByPagination = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch newspaper',
+      error: error.message
+    });
+  }
+};
+
+const getNewspapersIncludeFuture = async (req, res) => {
+  try {
+    console.log(req.query);
+    const page = parseInt(req.query.page) || 1;
+    const includeFuture = req.query.includeFuture === 'true'; // Convert string to boolean
+    const limit = 1;
+    const skip = (page - 1) * limit;
+    const now = new Date();
+
+    // Build the query conditionally
+    let query = {};
+    if (!includeFuture) {
+      query = {
+        isPublished: true,  // Only include published newspapers
+        publicationDate: { $lte: now }  // Additional safety check
+      };
+    }
+
+    // Get total count of newspapers (with or without future ones)
+    const totalNewspapers = await NewspaperDetails.countDocuments(query);
+    
+    const totalPages = Math.ceil(totalNewspapers / limit);
+
+    // Get the newspaper for the current page
+    const newspaper = await NewspaperDetails.findOne(query)
+      .sort({ publicationDate: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    if (!newspaper) {
+      return res.status(404).json({
+        success: false,
+        message: includeFuture 
+          ? 'No newspapers found' 
+          : 'No published newspapers found',
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: newspaper,
+      pagination: {
+        currentPage: page,
+        totalPages,
+        totalNewspapers,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
+      },
+      includeFuture: includeFuture
+    });
+
+  } catch (error) {
+    console.error('getNewspapersIncludeFuture:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch newspapers',
       error: error.message
     });
   }
@@ -395,4 +473,5 @@ module.exports = {
   getAvailableDates,
   getNewspaperByPagination,
   deleteNewspaper,
+  getNewspapersIncludeFuture
 };
