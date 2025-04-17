@@ -3,6 +3,66 @@ import { jsPDF } from "jspdf";
 import { Download, ChevronLeft, ChevronRight, Calendar, ZoomIn, ZoomOut, Maximize, Minimize } from "lucide-react";
 import axios from "axios";
 
+// CSS styles for 3D flip animation
+const flipStyles = `
+  .perspective-1000 {
+    perspective: 1000px;
+    -webkit-perspective: 1000px;
+  }
+  
+  .flip-card {
+    transform-style: preserve-3d;
+    -webkit-transform-style: preserve-3d;
+    transition: transform 0.6s cubic-bezier(0.4, 0.0, 0.2, 1);
+    -webkit-transition: transform 0.6s cubic-bezier(0.4, 0.0, 0.2, 1);
+  }
+  
+  .flip-card.no-transition {
+    transition: none !important;
+    -webkit-transition: none !important;
+  }
+  
+  .flip-card.flipping.left {
+    transform: rotateY(-180deg);
+    -webkit-transform: rotateY(-180deg);
+  }
+  
+  .flip-card.flipping.right {
+    transform: rotateY(180deg);
+    -webkit-transform: rotateY(180deg);
+  }
+  
+  .flip-card-front,
+  .flip-card-back {
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    transform-style: preserve-3d;
+    -webkit-transform-style: preserve-3d;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  
+  .flip-card-back {
+    transform: rotateY(180deg);
+    -webkit-transform: rotateY(180deg);
+  }
+  
+  .flip-card-front img,
+  .flip-card-back img {
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    transition: box-shadow 0.3s ease;
+  }
+  
+  .flipping .flip-card-front img,
+  .flipping .flip-card-back img {
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3);
+  }
+`;
+
 export default function ImageViewer() {
   const [images, setImages] = useState([]);
   const [activeImage, setActiveImage] = useState(null);
@@ -10,16 +70,21 @@ export default function ImageViewer() {
   const [downloading, setDownloading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [zoomLevel, setZoomLevel] = useState(75); // Changed default zoom level to 75%
+  const [zoomLevel, setZoomLevel] = useState(75);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [viewportDimensions, setViewportDimensions] = useState({ width: 0, height: 0 });
   const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
+  const [isFlipping, setIsFlipping] = useState(false);
+  const [noTransition, setNoTransition] = useState(false);
+  const [flipDirection, setFlipDirection] = useState('');
+  const [nextImageToShow, setNextImageToShow] = useState(null);
   const zoomedImageRef = useRef(null);
   const containerRef = useRef(null);
   const imageRef = useRef(null);
-  
+  const flipCardRef = useRef(null);
+
   // Helper function to format date as YYYY-MM-DD
   const formatDate = (date) => {
     const year = date.getFullYear();
@@ -28,12 +93,12 @@ export default function ImageViewer() {
     return `${year}-${month}-${day}`;
   };
 
-  // Set initial date to today (correctly handles timezone)
+  // Set initial date to today
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const todayDateStr = formatDate(today);
   const [selectedDate, setSelectedDate] = useState(todayDateStr);
-  
+
   const [availableDates, setAvailableDates] = useState([]);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [currentMonthYear, setCurrentMonthYear] = useState({
@@ -46,6 +111,90 @@ export default function ImageViewer() {
     const checkDate = new Date(date);
     checkDate.setHours(0, 0, 0, 0);
     return checkDate > today;
+  };
+
+  // Calculate maximum zoom level based on image and viewport dimensions
+  const calculateMaxZoom = () => {
+    if (!imageDimensions.width || !viewportDimensions.width) return 400;
+    const widthRatio = (imageDimensions.width * 4) / viewportDimensions.width;
+    const heightRatio = (imageDimensions.height * 4) / viewportDimensions.height;
+    return Math.min(400, Math.max(100, Math.floor(Math.max(widthRatio, heightRatio) * 100)));
+  };
+
+  // Enhanced zoom to point functionality
+  const zoomToPoint = (e, newZoomLevel) => {
+    if (!containerRef.current || !imageRef.current) return;
+    
+    // Get container dimensions and mouse position
+    const containerRect = containerRef.current.getBoundingClientRect();
+    const mouseX = e.clientX - containerRect.left;
+    const mouseY = e.clientY - containerRect.top;
+    
+    // Calculate current and new zoom factors
+    const currentZoom = zoomLevel / 100;
+    const newZoom = newZoomLevel / 100;
+    
+    // Calculate the mouse position relative to the image center
+    const relativeX = mouseX - containerRect.width / 2 - position.x;
+    const relativeY = mouseY - containerRect.height / 2 - position.y;
+    
+    // Calculate the new position to zoom toward the mouse pointer
+    const newX = position.x - (relativeX * (newZoom / currentZoom - 1));
+    const newY = position.y - (relativeY * (newZoom / currentZoom - 1));
+    
+    // Apply constraints
+    const constraints = calculateConstraints(newZoomLevel);
+    setPosition({
+      x: Math.min(Math.max(newX, constraints.minX), constraints.maxX),
+      y: Math.min(Math.max(newY, constraints.minY), constraints.maxY)
+    });
+    
+    setZoomLevel(newZoomLevel);
+  };
+
+  // Enhanced zoom in with mouse position
+  const zoomIn = (e) => {
+    const newZoom = Math.min(zoomLevel + 25, calculateMaxZoom());
+    zoomToPoint(e, newZoom);
+  };
+
+  // Enhanced zoom out with mouse position
+  const zoomOut = (e) => {
+    const newZoom = Math.max(zoomLevel - 25, 50);
+    if (newZoom === 75) {
+      setPosition({ x: 0, y: 0 });
+    }
+    zoomToPoint(e, newZoom);
+  };
+
+  // Reset zoom to default
+  const resetZoom = () => {
+    setZoomLevel(75);
+    setPosition({ x: 0, y: 0 });
+  };
+
+  // Calculate constraints based on current zoom level
+  const calculateConstraints = (zoom = zoomLevel) => {
+    if (!containerRef.current || !imageRef.current) return { minX: 0, maxX: 0, minY: 0, maxY: 0 };
+
+    const containerWidth = containerRef.current.clientWidth;
+    const containerHeight = containerRef.current.clientHeight;
+    const zoomFactor = zoom / 100;
+
+    // Calculate image dimensions at current zoom level
+    const scaledWidth = imageDimensions.width * zoomFactor;
+    const scaledHeight = imageDimensions.height * zoomFactor;
+
+    // Calculate maximum allowed pan in each direction
+    const horizontalConstraint = Math.max(0, (scaledWidth - containerWidth) / 2);
+    const verticalConstraint = Math.max(0, (scaledHeight - containerHeight) / 2);
+
+    return {
+      minX: -horizontalConstraint,
+      maxX: horizontalConstraint,
+      minY: -verticalConstraint,
+      maxY: verticalConstraint
+    };
   };
 
   // Update viewport dimensions on resize
@@ -61,10 +210,10 @@ export default function ImageViewer() {
 
     // Set initial dimensions
     updateViewportDimensions();
-    
+
     // Add resize listener
     window.addEventListener('resize', updateViewportDimensions);
-    
+
     return () => {
       window.removeEventListener('resize', updateViewportDimensions);
     };
@@ -83,7 +232,7 @@ export default function ImageViewer() {
   // Reset zoom level and position when opening the zoom modal
   useEffect(() => {
     if (isZoomed) {
-      setZoomLevel(75); // Changed to 75% default zoom when modal opens
+      setZoomLevel(75);
       setPosition({ x: 0, y: 0 });
     }
   }, [isZoomed]);
@@ -93,12 +242,12 @@ export default function ImageViewer() {
     const fetchAvailableDates = async () => {
       try {
         const response = await axios.get(
-          `http://localhost:5002/newspaper/dates?month=${currentMonthYear.month
+          `${process.env.REACT_APP_BACKEND_URL}/newspaper/dates?month=${currentMonthYear.month
             .toString()
             .padStart(2, '0')}&year=${currentMonthYear.year}`
         );
         // Filter out future dates from available dates
-        const filteredDates = response.data.data.filter(dateObj => 
+        const filteredDates = response.data.data.filter(dateObj =>
           !isFutureDate(dateObj.date)
         );
         setAvailableDates(filteredDates);
@@ -117,9 +266,9 @@ export default function ImageViewer() {
       try {
         let url;
         if (selectedDate === todayDateStr) {
-          url = 'http://localhost:5002/newspaper';
+          url = `${process.env.REACT_APP_BACKEND_URL}/newspaper`;
         } else {
-          url = `http://localhost:5002/newspaper/date?date=${selectedDate}`;
+          url = `${process.env.REACT_APP_BACKEND_URL}/newspaper/date?date=${selectedDate}`;
         }
 
         const response = await axios.get(url);
@@ -180,13 +329,63 @@ export default function ImageViewer() {
   };
 
   const nextImage = () => {
-    if (!activeImage || !images.length) return;
-    setActiveImage((prev) => images[(prev.id % images.length)]);
+    if (!activeImage || !images.length || isFlipping) return;
+
+    // Get the next image
+    const nextImg = images[(activeImage.id % images.length)];
+
+    // Reset any previous no-transition state
+    setNoTransition(false);
+
+    // Set animation direction and next image
+    setFlipDirection('left');
+    setNextImageToShow(nextImg);
+    setIsFlipping(true);
+
+    // After animation completes, update the active image and reset the card
+    setTimeout(() => {
+      // Disable transitions temporarily
+      setNoTransition(true);
+      setIsFlipping(false);
+
+      // Update active image
+      setActiveImage(nextImg);
+
+      // Re-enable transitions after the DOM has updated
+      setTimeout(() => {
+        setNoTransition(false);
+      }, 50);
+    }, 600);
   };
 
   const prevImage = () => {
-    if (!activeImage || !images.length) return;
-    setActiveImage((prev) => images[(prev.id - 2 + images.length) % images.length]);
+    if (!activeImage || !images.length || isFlipping) return;
+
+    // Get the previous image
+    const prevImg = images[(activeImage.id - 2 + images.length) % images.length];
+
+    // Reset any previous no-transition state
+    setNoTransition(false);
+
+    // Set animation direction and next image
+    setFlipDirection('right');
+    setNextImageToShow(prevImg);
+    setIsFlipping(true);
+
+    // After animation completes, update the active image and reset the card
+    setTimeout(() => {
+      // Disable transitions temporarily
+      setNoTransition(true);
+      setIsFlipping(false);
+
+      // Update active image
+      setActiveImage(prevImg);
+
+      // Re-enable transitions after the DOM has updated
+      setTimeout(() => {
+        setNoTransition(false);
+      }, 50);
+    }, 600);
   };
 
   const handleDateChange = (date) => {
@@ -222,91 +421,49 @@ export default function ImageViewer() {
     });
   };
 
-  // Zoom functions with improved mobile support
-  const zoomIn = () => {
-    setZoomLevel(prev => {
-      const newZoom = Math.min(prev + 25, 400);
-      return newZoom;
-    });
-  };
-
-  const zoomOut = () => {
-    setZoomLevel(prev => {
-      const newZoom = Math.max(prev - 25, 50);
-      if (newZoom === 75) { // Changed to match new default zoom level
-        setPosition({ x: 0, y: 0 });
-      }
-      return newZoom;
-    });
-  };
-
-  const resetZoom = () => {
-    setZoomLevel(75); // Changed to reset to 75% zoom
-    setPosition({ x: 0, y: 0 });
-  };
-
-  // Calculate constraints to prevent panning beyond image boundaries
-  const calculateConstraints = () => {
-    if (!containerRef.current || !imageRef.current) return { minX: 0, maxX: 0, minY: 0, maxY: 0 };
+  // Enhanced wheel handler for smooth zooming
+  const handleWheel = (e) => {
+    e.preventDefault();
     
-    const containerWidth = containerRef.current.clientWidth;
-    const containerHeight = containerRef.current.clientHeight;
+    // Calculate new zoom level based on wheel direction
+    const delta = e.deltaY < 0 ? 1 : -1;
+    const zoomStep = 10; // Smaller steps for smoother zooming
+    const newZoom = Math.min(Math.max(zoomLevel + (delta * zoomStep), 50), calculateMaxZoom());
     
-    // Calculate image dimensions at current zoom level
-    const scaledWidth = imageDimensions.width * (zoomLevel / 100);
-    const scaledHeight = imageDimensions.height * (zoomLevel / 100);
-    
-    // Calculate maximum allowed pan in each direction
-    const horizontalConstraint = Math.max(0, (scaledWidth - containerWidth) / 2);
-    const verticalConstraint = Math.max(0, (scaledHeight - containerHeight) / 2);
-    
-    return {
-      minX: -horizontalConstraint,
-      maxX: horizontalConstraint,
-      minY: -verticalConstraint,
-      maxY: verticalConstraint
-    };
-  };
-
-  // Keep position within bounds when zoom level changes
-  useEffect(() => {
-    if (isZoomed) {
-      const constraints = calculateConstraints();
-      setPosition(prev => ({
-        x: Math.min(Math.max(prev.x, constraints.minX), constraints.maxX),
-        y: Math.min(Math.max(prev.y, constraints.minY), constraints.maxY)
-      }));
+    // Only zoom if we're actually changing zoom level
+    if (newZoom !== zoomLevel) {
+      zoomToPoint(e, newZoom);
     }
-  }, [zoomLevel, imageDimensions, viewportDimensions]);
+  };
 
   // Enhanced touch support for mobile
   const handleTouchStart = (e) => {
-    if (e.touches.length === 1 && zoomLevel > 75) { // Changed condition to be relative to new default
+    if (e.touches.length === 1 && zoomLevel > 75) {
       setIsDragging(true);
-      setDragStart({ 
-        x: e.touches[0].clientX, 
-        y: e.touches[0].clientY 
+      setDragStart({
+        x: e.touches[0].clientX,
+        y: e.touches[0].clientY
       });
     }
   };
 
   const handleTouchMove = (e) => {
-    if (isDragging && e.touches.length === 1 && zoomLevel > 75) { // Changed condition to be relative to new default
+    if (isDragging && e.touches.length === 1 && zoomLevel > 75) {
       e.preventDefault(); // Prevent page scroll
-      
+
       const dx = e.touches[0].clientX - dragStart.x;
       const dy = e.touches[0].clientY - dragStart.y;
-      
+
       const constraints = calculateConstraints();
-      
+
       setPosition(prev => ({
         x: Math.min(Math.max(prev.x + dx, constraints.minX), constraints.maxX),
         y: Math.min(Math.max(prev.y + dy, constraints.minY), constraints.maxY)
       }));
-      
-      setDragStart({ 
-        x: e.touches[0].clientX, 
-        y: e.touches[0].clientY 
+
+      setDragStart({
+        x: e.touches[0].clientX,
+        y: e.touches[0].clientY
       });
     }
   };
@@ -317,7 +474,7 @@ export default function ImageViewer() {
 
   // Mouse events for panning with improved boundary logic
   const handleMouseDown = (e) => {
-    if (zoomLevel > 75) { // Changed condition to be relative to new default
+    if (zoomLevel > 75) {
       setIsDragging(true);
       setDragStart({ x: e.clientX, y: e.clientY });
       // Change cursor style
@@ -328,17 +485,17 @@ export default function ImageViewer() {
   };
 
   const handleMouseMove = (e) => {
-    if (isDragging && zoomLevel > 75) { // Changed condition to be relative to new default
+    if (isDragging && zoomLevel > 75) {
       const dx = e.clientX - dragStart.x;
       const dy = e.clientY - dragStart.y;
-      
+
       const constraints = calculateConstraints();
-      
+
       setPosition(prev => ({
         x: Math.min(Math.max(prev.x + dx, constraints.minX), constraints.maxX),
         y: Math.min(Math.max(prev.y + dy, constraints.minY), constraints.maxY)
       }));
-      
+
       setDragStart({ x: e.clientX, y: e.clientY });
     }
   };
@@ -347,52 +504,98 @@ export default function ImageViewer() {
     setIsDragging(false);
     // Restore cursor
     if (containerRef.current) {
-      containerRef.current.style.cursor = zoomLevel > 75 ? 'grab' : 'default'; // Changed condition to be relative to new default
+      containerRef.current.style.cursor = zoomLevel > 75 ? 'grab' : 'default';
     }
   };
 
-  // Handle wheel zoom with position adjustment
-  const handleWheel = (e) => {
-    e.preventDefault();
-    
-    // Get mouse position relative to container
-    const rect = e.currentTarget.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
-    
-    // Calculate position relative to center
-    const containerCenterX = rect.width / 2;
-    const containerCenterY = rect.height / 2;
-    
-    // Calculate the mouse position relative to the image center
-    const relativeX = mouseX - containerCenterX - position.x;
-    const relativeY = mouseY - containerCenterY - position.y;
-    
-    // Apply zoom
-    const oldZoom = zoomLevel / 100;
-    const newZoom = e.deltaY < 0 
-      ? Math.min(zoomLevel + 25, 400) / 100  // Zoom in
-      : Math.max(zoomLevel - 25, 50) / 100;  // Zoom out
-    
-    // Adjust position based on zoom change and mouse position
-    if (newZoom !== oldZoom) {
-      // Calculate position adjustment to zoom toward/from mouse pointer
-      const scaleChange = newZoom / oldZoom;
-      let newX = position.x - (relativeX * (scaleChange - 1));
-      let newY = position.y - (relativeY * (scaleChange - 1));
-      
-      // Apply constraints
-      const constraints = calculateConstraints();
-      newX = Math.min(Math.max(newX, constraints.minX), constraints.maxX);
-      newY = Math.min(Math.max(newY, constraints.minY), constraints.maxY);
-      
-      setPosition({ x: newX, y: newY });
-      setZoomLevel(newZoom * 100);
+  // Function to go to a specific page
+  const goToPage = (pageNum) => {
+    if (pageNum >= 1 && pageNum <= images.length && !isFlipping) {
+      const targetImage = images[pageNum - 1];
+
+      // If same page or no current page, just set it without animation
+      if (!activeImage || activeImage.id === pageNum) {
+        setActiveImage(targetImage);
+        return;
+      }
+
+      // Reset any previous no-transition state
+      setNoTransition(false);
+
+      // Determine flip direction based on current and target page
+      const direction = pageNum > activeImage.id ? 'left' : 'right';
+      setFlipDirection(direction);
+      setNextImageToShow(targetImage);
+      setIsFlipping(true);
+
+      // After animation completes, update the active image and reset the card
+      setTimeout(() => {
+        // Disable transitions temporarily
+        setNoTransition(true);
+        setIsFlipping(false);
+
+        // Update active image
+        setActiveImage(targetImage);
+
+        // Re-enable transitions after the DOM has updated
+        setTimeout(() => {
+          setNoTransition(false);
+        }, 50);
+      }, 600);
     }
+  };
+
+  // Pagination component
+  const renderPagination = () => {
+    if (!images.length || !activeImage) return null;
+
+    const currentPage = activeImage.id;
+    const totalPages = images.length;
+
+    return (
+      <div className="flex justify-center mt-4">
+        <div className="flex">
+          {/* First button (previous) */}
+          <button
+            onClick={() => goToPage(Math.max(1, currentPage - 1))}
+            disabled={currentPage === 1}
+            className="flex items-center justify-center w-12 h-12 border border-gray-300 hover:bg-gray-100 disabled:opacity-50"
+            aria-label="Previous page"
+          >
+            «
+          </button>
+
+          {/* Page number buttons */}
+          {Array.from({ length: Math.min(7, totalPages) }, (_, i) => i + 1).map(pageNum => (
+            <button
+              key={pageNum}
+              onClick={() => goToPage(pageNum)}
+              className={`flex items-center justify-center w-12 h-12 border border-gray-300 ${pageNum === currentPage ? "bg-green-500 text-white" : "hover:bg-gray-100"
+                }`}
+            >
+              {pageNum}
+            </button>
+          ))}
+
+          {/* Last button (next) */}
+          <button
+            onClick={() => goToPage(Math.min(totalPages, currentPage + 1))}
+            disabled={currentPage === totalPages}
+            className="flex items-center justify-center w-12 h-12 border border-gray-300 hover:bg-gray-100 disabled:opacity-50"
+            aria-label="Next page"
+          >
+            »
+          </button>
+        </div>
+      </div>
+    );
   };
 
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col mt-14">
+      {/* Add flip animation styles */}
+      <style>{flipStyles}</style>
+
       {/* Navbar */}
       <nav className="bg-gray-800 text-white p-4 flex justify-between items-center">
         <div className="relative">
@@ -407,7 +610,7 @@ export default function ImageViewer() {
           {showDatePicker && (
             <div className="absolute top-full left-0 mt-2 bg-gray-700 p-4 rounded shadow-lg z-50 w-64">
               <div className="flex justify-between items-center mb-2">
-                <button 
+                <button
                   onClick={() => changeMonthYear(-1)}
                   className="hover:bg-gray-600 p-1 rounded"
                 >
@@ -416,7 +619,7 @@ export default function ImageViewer() {
                 <span className="font-medium">
                   {new Date(currentMonthYear.year, currentMonthYear.month - 1).toLocaleString('default', { month: 'long', year: 'numeric' })}
                 </span>
-                <button 
+                <button
                   onClick={() => {
                     const currentDate = new Date(currentMonthYear.year, currentMonthYear.month - 1, 1);
                     currentDate.setHours(0, 0, 0, 0);
@@ -452,12 +655,11 @@ export default function ImageViewer() {
                   return (
                     <button
                       key={day}
-                      className={`p-1 rounded ${
-                        isToday ? 'border border-yellow-400 bg-gray-600' : 
-                        isSelected ? 'bg-blue-500' : 
-                        isAvailable ? 'bg-gray-600 hover:bg-gray-500' : 
-                        isFuture ? 'text-gray-400 cursor-not-allowed' : 'text-gray-500'
-                      }`}
+                      className={`p-1 rounded ${isToday ? 'bg-blue-600' :
+                        isSelected ? 'border-2 border-blue-500' :
+                          isAvailable ? 'bg-gray-600 hover:bg-gray-500' :
+                            isFuture ? 'text-gray-400 cursor-not-allowed' : 'text-gray-500'
+                        }`}
                       onClick={() => !isFuture && isAvailable && handleDateChange(dateStr)}
                       disabled={isFuture || !isAvailable}
                     >
@@ -476,43 +678,13 @@ export default function ImageViewer() {
             <select
               className="bg-gray-700 px-3 py-1 rounded hidden md:block"
               value={activeImage?.id}
-              onChange={(e) => setActiveImage(images.find(img => img.id === Number(e.target.value)))}
-              disabled={loading || !images.length}
+              onChange={(e) => goToPage(Number(e.target.value))}
+              disabled={loading || !images.length || isFlipping}
             >
               {images.map((img) => (
                 <option key={img.id} value={img.id}>Page - {img.id}</option>
               ))}
             </select>
-
-            <div className="flex space-x-1 md:space-x-2 items-center text-sm md:text-base">
-              {activeImage?.id > 3 && (
-                <button 
-                  className="px-1 hover:bg-gray-700 rounded" 
-                  onClick={() => setActiveImage(images[activeImage.id - 4])}
-                >
-                  ◁
-                </button>
-              )}
-              {images.slice(activeImage.id - 1, activeImage.id + 2).map((img) => (
-                <button
-                  key={img.id}
-                  className={`px-2 md:px-3 py-1 rounded ${
-                    img.id === activeImage.id ? "bg-blue-500" : "bg-gray-600 hover:bg-gray-500"
-                  }`}
-                  onClick={() => setActiveImage(img)}
-                >
-                  {img.id}
-                </button>
-              ))}
-              {activeImage.id + 3 <= images.length && (
-                <button 
-                  className="px-1 hover:bg-gray-700 rounded" 
-                  onClick={() => setActiveImage(images[activeImage.id + 2])}
-                >
-                  ▷
-                </button>
-              )}
-            </div>
           </>
         )}
         <button
@@ -551,30 +723,60 @@ export default function ImageViewer() {
           ) : (
             <>
               <button
-                className="absolute left-2 top-1/2 transform -translate-y-1/2 bg-gray-700 p-2 rounded-full text-white hover:bg-gray-600 disabled:opacity-50"
+                className="absolute left-2 top-1/2 transform -translate-y-1/2 bg-gray-700 p-2 rounded-full text-white hover:bg-gray-600 disabled:opacity-50 z-10 transition-all duration-300 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:hover:bg-gray-400"
                 onClick={prevImage}
-                disabled={images.length <= 1}
+                disabled={images.length <= 1 || isFlipping || activeImage?.id === 1}
+                aria-label="Previous page"
               >
                 <ChevronLeft size={24} />
               </button>
 
-              <img
-                src={activeImage.src}
-                alt={`Page ${activeImage.id}`}
-                className="shadow-lg border-2 border-gray-400 cursor-zoom-in max-h-[70vh] object-contain"
-                onClick={() => setIsZoomed(true)}
-              />
+              {/* 3D Flip Card Container */}
+              <div className="perspective-1000 w-full flex justify-center items-center" style={{ height: '70vh' }}>
+                <div
+                  ref={flipCardRef}
+                  className={`flip-card ${isFlipping ? `flipping ${flipDirection}` : ''} ${noTransition ? 'no-transition' : ''}`}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    position: 'relative'
+                  }}
+                >
+                  {/* Current Active Image - Front */}
+                  <div className="flip-card-front">
+                    <img
+                      src={activeImage.src}
+                      alt={`Page ${activeImage.id}`}
+                      className="shadow-lg border-2 border-gray-400 cursor-zoom-in max-h-[70vh] object-contain"
+                      onClick={() => setIsZoomed(true)}
+                    />
+                  </div>
+
+                  {/* Next Image To Show - Back */}
+                  <div className="flip-card-back">
+                    <img
+                      src={(nextImageToShow || activeImage).src}
+                      alt={`Page ${(nextImageToShow || activeImage).id}`}
+                      className="shadow-lg border-2 border-gray-400 cursor-zoom-in max-h-[70vh] object-contain"
+                    />
+                  </div>
+                </div>
+              </div>
 
               <button
-                className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-gray-700 p-2 rounded-full text-white hover:bg-gray-600 disabled:opacity-50"
+                className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-gray-700 p-2 rounded-full text-white hover:bg-gray-600 disabled:opacity-50 z-10 transition-all duration-300 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:hover:bg-gray-400"
                 onClick={nextImage}
-                disabled={images.length <= 1}
+                disabled={images.length <= 1 || isFlipping || activeImage?.id === images.length}
+                aria-label="Next page"
               >
                 <ChevronRight size={24} />
               </button>
             </>
           )}
         </div>
+
+        {/* Updated Pagination Component */}
+        {renderPagination()}
 
         {/* Bottom Preview - All Images */}
         {images.length > 0 && (
@@ -584,19 +786,18 @@ export default function ImageViewer() {
                 key={img.id}
                 src={img.src}
                 alt={`Page ${img.id}`}
-                className={`cursor-pointer border-4 h-32 object-contain ${
-                  img.id === activeImage?.id ? "border-blue-500" : "border-gray-300 hover:border-gray-400"
-                }`}
-                onClick={() => setActiveImage(img)}
+                className={`cursor-pointer border-4 h-32 object-contain ${img.id === activeImage?.id ? "border-blue-500" : "border-gray-300 hover:border-gray-400"
+                  }`}
+                onClick={() => goToPage(img.id)}
               />
             ))}
           </div>
         )}
       </div>
 
-      {/* Enhanced Zoom Popup with Improved Mobile Support */}
+      {/* Enhanced Zoom Popup */}
       {isZoomed && activeImage && (
-        <div 
+        <div
           className="fixed inset-0 bg-black bg-opacity-90 flex justify-center items-center p-4 z-50"
           onClick={(e) => {
             if (e.target === e.currentTarget) {
@@ -608,30 +809,30 @@ export default function ImageViewer() {
             {/* Toolbar */}
             <div className="bg-gray-800 p-2 flex items-center justify-between rounded-t-lg">
               <div className="flex items-center gap-2">
-                <button 
+                <button
                   className="bg-gray-700 p-2 rounded hover:bg-gray-600 text-white"
-                  onClick={zoomIn}
+                  onClick={(e) => zoomIn(e)}
                   title="Zoom In"
                 >
                   <ZoomIn size={20} />
                 </button>
-                <button 
+                <button
                   className="bg-gray-700 p-2 rounded hover:bg-gray-600 text-white"
-                  onClick={zoomOut}
+                  onClick={(e) => zoomOut(e)}
                   title="Zoom Out"
                 >
                   <ZoomOut size={20} />
                 </button>
-                <button 
+                <button
                   className="bg-gray-700 p-2 rounded hover:bg-gray-600 text-white"
                   onClick={resetZoom}
                   title="Reset Zoom"
                 >
                   {zoomLevel === 75 ? <Maximize size={20} /> : <Minimize size={20} />}
                 </button>
-                <span className="text-white ml-2">{zoomLevel}%</span>
+                <span className="text-white ml-2">{zoomLevel}% (Max: {calculateMaxZoom()}%)</span>
               </div>
-              
+
               <button
                 className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600"
                 onClick={() => setIsZoomed(false)}
@@ -639,9 +840,9 @@ export default function ImageViewer() {
                 Close
               </button>
             </div>
-            
-            {/* Image container with improved mobile support */}
-            <div 
+
+            {/* Image container with improved zoom behavior */}
+            <div
               ref={containerRef}
               className="flex-1 overflow-hidden relative bg-gray-800"
               onMouseDown={handleMouseDown}
@@ -652,25 +853,20 @@ export default function ImageViewer() {
               onTouchStart={handleTouchStart}
               onTouchMove={handleTouchMove}
               onTouchEnd={handleTouchEnd}
-              style={{ 
-                cursor: zoomLevel > 75 ? (isDragging ? 'grabbing' : 'grab') : 'default',
-                position: 'relative'
+              style={{
+                cursor: zoomLevel > 75 ? (isDragging ? 'grabbing' : 'grab') : 'default'
               }}
             >
-              <div 
+              <div
                 ref={zoomedImageRef}
-                style={{ 
+                style={{
                   position: 'absolute',
                   left: '50%',
                   top: '50%',
                   transform: `translate(calc(-50% + ${position.x}px), calc(-50% + ${position.y}px)) scale(${zoomLevel / 100})`,
                   transformOrigin: 'center',
-                  transition: isDragging ? 'none' : 'transform 0.1s ease-out',
-                  width: zoomLevel < 75 ? '100%' : 'auto', // Changed to match new default zoom
-                  height: zoomLevel < 75 ? '100%' : 'auto', // Changed to match new default zoom
-                  display: 'flex',
-                  justifyContent: 'center',
-                  alignItems: 'center'
+                  transition: isDragging ? 'none' : 'transform 0.2s ease-out',
+                  willChange: 'transform'
                 }}
               >
                 <img
@@ -680,22 +876,18 @@ export default function ImageViewer() {
                   onLoad={handleImageLoaded}
                   draggable="false"
                   style={{
-                    maxWidth: zoomLevel < 75 ? '100%' : 'none', // Changed to match new default zoom
-                    maxHeight: zoomLevel < 75 ? '100%' : 'none', // Changed to match new default zoom
-                    objectFit: zoomLevel < 75 ? 'contain' : 'none' // Changed to match new default zoom
+                    maxWidth: 'none',
+                    maxHeight: 'none',
+                    display: 'block'
                   }}
                 />
               </div>
             </div>
-            
-            {/* Instructions with mobile-specific guidance */}
+
+            {/* Instructions */}
             <div className="bg-gray-800 text-gray-300 text-xs md:text-sm p-2 text-center rounded-b-lg">
-              <p className="hidden md:block">Use mouse wheel to zoom in/out. Click and drag to pan when zoomed in.</p>
-              <p className="md:hidden">Pinch to zoom in/out. Touch and drag to pan when zoomed in.</p>
-              <p className="text-xs text-gray-400 mt-1">
-                Current zoom level: {zoomLevel}%. 
-                {zoomLevel <= 75 && <span className="text-yellow-400 ml-1">For best mobile viewing at low zoom levels, try landscape orientation.</span>}
-              </p>
+              <p className="hidden md:block">Scroll to zoom. Click and drag to pan. Zoom happens at mouse pointer position.</p>
+              <p className="md:hidden">Pinch to zoom. Touch and drag to pan.</p>
             </div>
           </div>
         </div>
