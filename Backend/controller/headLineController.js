@@ -18,7 +18,7 @@ const createHeadLine = async (req, res) => {
 const createMultipleHeadLine = async (req, res) => {
   try {
     const linksArray = req.body;
-    
+
     if (!Array.isArray(linksArray)) {
       return res.status(400).json({ error: 'Input must be an array' });
     }
@@ -45,11 +45,11 @@ const createMultipleHeadLine = async (req, res) => {
 // READ - Get all navigation links
 const getHeadLine = async (req, res) => {
   try {
-    const HeadLine = await HeadLine.findOne({})
+    const headlines = await HeadLine.findOne({})
       .sort({ updatedAt: -1 })
       .limit(1);
-      
-    const links = HeadLine ? HeadLine.links : [];
+
+    const links = headlines ? headlines.links : [];
     res.status(200).json(links);
   } catch (error) {
     console.error('Error fetching navigation links:', error);
@@ -61,7 +61,7 @@ const getHeadLine = async (req, res) => {
 const updateHeadLine = async (req, res) => {
   try {
     const { linkId, updatedLink } = req.body;
-    
+
     if (!linkId || !updatedLink || !updatedLink.name || !updatedLink.path) {
       return res.status(400).json({ error: 'Missing required fields: linkId and updatedLink (with name and path)' });
     }
@@ -108,7 +108,7 @@ const deleteHeadLine = async (req, res) => {
     const { id } = req.params;
     const updated = await HeadLine.findOneAndUpdate(
       {},
-      { $pull: { links: { $or: [ { _id: id } ] } } },
+      { $pull: { links: { $or: [{ _id: id }] } } },
       { new: true }
     );
     const links = updated ? updated.links : [];

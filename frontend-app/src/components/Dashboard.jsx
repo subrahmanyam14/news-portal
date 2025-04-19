@@ -71,7 +71,6 @@ const Dashboard = () => {
       fetchNavLinks();
       if (activeTab === 'headlines') {
         fetchHeadlines();
-        fetchHeadlineCategories();
       }
     }
   }, [navigate, activeTab]);
@@ -414,78 +413,17 @@ const Dashboard = () => {
     setHeadlinesLoading(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}/headlines`, {
+      const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}/headline/get`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
-      setHeadlines(response.data);
+      
+      setHeadlines(response.data || []);
     } catch (err) {
       toast.error(err.response?.data?.message || err.message || 'Failed to fetch headlines');
     } finally {
       setHeadlinesLoading(false);
-    }
-  };
-
-  // Fetch headline categories
-  const fetchHeadlineCategories = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}/headlines/categories`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      setHeadlineCategories(response.data);
-    } catch (err) {
-      toast.error(err.response?.data?.message || err.message || 'Failed to fetch categories');
-    }
-  };
-
-  // Add new headline category
-  const handleAddCategory = async () => {
-    if (!newCategory.trim()) {
-      toast.error('Category name cannot be empty');
-      return;
-    }
-
-    try {
-      const token = localStorage.getItem('token');
-      await axios.post(
-        `${process.env.REACT_APP_BACKEND_URL}/headlines/categories`,
-        { name: newCategory },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      toast.success('Category added successfully');
-      setNewCategory('');
-      fetchHeadlineCategories();
-    } catch (err) {
-      toast.error(err.response?.data?.message || err.message || 'Failed to add category');
-    }
-  };
-
-  // Delete headline category
-  const handleDeleteCategory = async (categoryId) => {
-    if (!window.confirm('Are you sure you want to delete this category? All headlines in this category will be moved to "Uncategorized".')) {
-      return;
-    }
-
-    try {
-      const token = localStorage.getItem('token');
-      await axios.delete(`${process.env.REACT_APP_BACKEND_URL}/headlines/categories/${categoryId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      toast.success('Category deleted successfully');
-      fetchHeadlineCategories();
-      fetchHeadlines(); // Refresh headlines as some may have been moved
-    } catch (err) {
-      toast.error(err.response?.data?.message || err.message || 'Failed to delete category');
     }
   };
 
@@ -497,16 +435,22 @@ const Dashboard = () => {
 
   // Update headline
   const handleUpdateHeadline = async () => {
-    if (!editingHeadline?.title || !editingHeadline?.content) {
-      toast.error('Title and content are required');
+    if (!editingHeadline?.name || !editingHeadline?.path) {
+      toast.error('Name and path are required');
       return;
     }
 
     try {
       const token = localStorage.getItem('token');
       await axios.put(
-        `${process.env.REACT_APP_BACKEND_URL}/headlines/${editingHeadline._id}`,
-        editingHeadline,
+        `${process.env.REACT_APP_BACKEND_URL}/headline/update/${editingHeadline._id}`,
+        {
+          linkId: editingHeadline._id,
+          updatedLink: {
+            name: editingHeadline.name,
+            path: editingHeadline.path
+          }
+        },
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -530,7 +474,7 @@ const Dashboard = () => {
 
     try {
       const token = localStorage.getItem('token');
-      await axios.delete(`${process.env.REACT_APP_BACKEND_URL}/headlines/${headlineId}`, {
+      await axios.delete(`${process.env.REACT_APP_BACKEND_URL}/headline/delete/${headlineId}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -559,15 +503,15 @@ const Dashboard = () => {
       }
 
       for (const headline of headlinesArray) {
-        if (!headline.title || !headline.content) {
-          toast.error('Each headline must have both title and content properties');
+        if (!headline.name || !headline.path) {
+          toast.error('Each headline must have both name and path properties');
           return;
         }
       }
 
       const token = localStorage.getItem('token');
       await axios.post(
-        `${process.env.REACT_APP_BACKEND_URL}/headlines/multiple`,
+        `${process.env.REACT_APP_BACKEND_URL}/headline/create-multiple`,
         headlinesArray,
         {
           headers: {
@@ -592,7 +536,7 @@ const Dashboard = () => {
 
     try {
       const token = localStorage.getItem('token');
-      await axios.delete(`${process.env.REACT_APP_BACKEND_URL}/headlines/clear`, {
+      await axios.delete(`${process.env.REACT_APP_BACKEND_URL}/headline/clear`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -667,53 +611,25 @@ const Dashboard = () => {
           <h3 className="text-xl font-semibold mb-4 text-gray-800">Edit Headline</h3>
 
           <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
             <input
               type="text"
-              value={editingHeadline.title}
-              onChange={(e) => setEditingHeadline({ ...editingHeadline, title: e.target.value })}
+              value={editingHeadline.name}
+              onChange={(e) => setEditingHeadline({ ...editingHeadline, name: e.target.value })}
               className="w-full border border-gray-300 bg-white text-gray-800 rounded p-2 focus:border-[#403fbb] focus:outline-none"
-              placeholder="Headline title"
+              placeholder="Headline name"
             />
           </div>
 
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Content</label>
-            <textarea
-              value={editingHeadline.content}
-              onChange={(e) => setEditingHeadline({ ...editingHeadline, content: e.target.value })}
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Path</label>
+            <input
+              type="text"
+              value={editingHeadline.path}
+              onChange={(e) => setEditingHeadline({ ...editingHeadline, path: e.target.value })}
               className="w-full border border-gray-300 bg-white text-gray-800 rounded p-2 focus:border-[#403fbb] focus:outline-none"
-              rows="4"
-              placeholder="Headline content"
+              placeholder="/path"
             />
-          </div>
-
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-            <select
-              value={editingHeadline.category || ''}
-              onChange={(e) => setEditingHeadline({ ...editingHeadline, category: e.target.value })}
-              className="w-full border border-gray-300 bg-white text-gray-800 rounded p-2 focus:border-[#403fbb] focus:outline-none"
-            >
-              <option value="">Uncategorized</option>
-              {headlineCategories.map((category) => (
-                <option key={category._id} value={category._id}>
-                  {category.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="mb-4">
-            <label className="flex items-center">
-              <input
-                type="checkbox"
-                checked={editingHeadline.isBreaking || false}
-                onChange={(e) => setEditingHeadline({ ...editingHeadline, isBreaking: e.target.checked })}
-                className="mr-2"
-              />
-              <span className="text-sm text-gray-700">Breaking News</span>
-            </label>
           </div>
 
           <div className="flex justify-end space-x-3">
@@ -744,11 +660,10 @@ const Dashboard = () => {
       <div className="bg-gray-100 p-1 rounded-lg flex items-center shadow-sm">
         <button
           onClick={() => setActiveTab('newspaper')}
-          className={`flex items-center gap-2 py-2 px-4 rounded-md transition-all duration-200 ${
-            activeTab === 'newspaper'
-              ? 'bg-white text-[#403fbb] shadow-sm font-medium tab-active'
-              : 'text-gray-600 hover:bg-gray-200'
-          }`}
+          className={`flex items-center gap-2 py-2 px-4 rounded-md transition-all duration-200 ${activeTab === 'newspaper'
+            ? 'bg-white text-[#403fbb] shadow-sm font-medium tab-active'
+            : 'text-gray-600 hover:bg-gray-200'
+            }`}
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
             stroke={activeTab === 'newspaper' ? '#403fbb' : 'currentColor'} strokeWidth="2"
@@ -762,11 +677,10 @@ const Dashboard = () => {
         </button>
         <button
           onClick={() => setActiveTab('navigation')}
-          className={`flex items-center gap-2 py-2 px-4 rounded-md transition-all duration-200 ${
-            activeTab === 'navigation'
-              ? 'bg-white text-[#403fbb] shadow-sm font-medium tab-active'
-              : 'text-gray-600 hover:bg-gray-200'
-          }`}
+          className={`flex items-center gap-2 py-2 px-4 rounded-md transition-all duration-200 ${activeTab === 'navigation'
+            ? 'bg-white text-[#403fbb] shadow-sm font-medium tab-active'
+            : 'text-gray-600 hover:bg-gray-200'
+            }`}
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
             stroke={activeTab === 'navigation' ? '#403fbb' : 'currentColor'} strokeWidth="2"
@@ -779,11 +693,10 @@ const Dashboard = () => {
         </button>
         <button
           onClick={() => setActiveTab('headlines')}
-          className={`flex items-center gap-2 py-2 px-4 rounded-md transition-all duration-200 ${
-            activeTab === 'headlines'
-              ? 'bg-white text-[#403fbb] shadow-sm font-medium tab-active'
-              : 'text-gray-600 hover:bg-gray-200'
-          }`}
+          className={`flex items-center gap-2 py-2 px-4 rounded-md transition-all duration-200 ${activeTab === 'headlines'
+            ? 'bg-white text-[#403fbb] shadow-sm font-medium tab-active'
+            : 'text-gray-600 hover:bg-gray-200'
+            }`}
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
             stroke={activeTab === 'headlines' ? '#403fbb' : 'currentColor'} strokeWidth="2"
@@ -809,7 +722,7 @@ const Dashboard = () => {
           value={multipleHeadlines}
           onChange={(e) => setMultipleHeadlines(e.target.value)}
           className="w-full h-32 border border-gray-300 bg-white text-gray-800 rounded p-2 focus:border-[#403fbb] focus:outline-none mb-2 font-mono text-sm"
-          placeholder={`[\n  { "title": "Important News", "content": "Details about the news...", "category": "category-id", "isBreaking": true },\n  { "title": "Another Headline", "content": "More details here..." }\n]`}
+          placeholder={`[\n  { "name": "Breaking News", "path": "/breaking-news" },\n  { "name": "Latest Updates", "path": "/latest" },\n  { "name": "Featured", "path": "/featured" }\n]`}
         />
         <div className="flex space-x-3">
           <button
@@ -820,16 +733,9 @@ const Dashboard = () => {
           </button>
           <button
             onClick={() => setMultipleHeadlines(`[
-  { 
-    "title": "Breaking News", 
-    "content": "This is a breaking news alert!", 
-    "isBreaking": true,
-    "category": "${headlineCategories[0]?._id || ''}"
-  },
-  { 
-    "title": "Regular Update", 
-    "content": "This is a regular news update." 
-  }
+  { "name": "Breaking News", "path": "/breaking-news" },
+  { "name": "Latest Updates", "path": "/latest" },
+  { "name": "Featured", "path": "/featured" }
 ]`)}
             className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
           >
@@ -839,47 +745,6 @@ const Dashboard = () => {
         <p className="mt-2 text-sm text-gray-600">
           Enter an array of headline objects in JSON format
         </p>
-      </div>
-
-      {/* Categories Management */}
-      <div className="mb-8 p-6 border border-gray-200 rounded-lg bg-white">
-        <h3 className="text-lg font-medium mb-3 text-gray-800">Headline Categories</h3>
-        
-        <div className="flex mb-4">
-          <input
-            type="text"
-            value={newCategory}
-            onChange={(e) => setNewCategory(e.target.value)}
-            className="flex-1 border border-gray-300 bg-white text-gray-800 rounded-l p-2 focus:border-[#403fbb] focus:outline-none"
-            placeholder="New category name"
-          />
-          <button
-            onClick={handleAddCategory}
-            className="px-4 py-2 bg-[#403fbb] text-white rounded-r hover:bg-[#5756c5] transition-colors"
-          >
-            Add Category
-          </button>
-        </div>
-
-        {headlineCategories.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-            {headlineCategories.map((category) => (
-              <div key={category._id} className="border border-gray-200 rounded p-3 flex justify-between items-center">
-                <span className="font-medium">{category.name}</span>
-                <button
-                  onClick={() => handleDeleteCategory(category._id)}
-                  className="text-red-500 hover:text-red-700"
-                >
-                  Delete
-                </button>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-4 text-gray-500">
-            <p>No categories created yet</p>
-          </div>
-        )}
       </div>
 
       {/* Headlines List */}
@@ -907,33 +772,16 @@ const Dashboard = () => {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-100">
                 <tr>
-                  <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Title</th>
-                  <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Content</th>
-                  <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Category</th>
-                  <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Status</th>
+                  <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Name</th>
+                  <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Path</th>
                   <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {headlines.map((headline, index) => (
                   <tr key={index} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                    <td className="px-4 py-2 text-sm text-gray-800">
-                      {headline.title}
-                      {headline.isBreaking && (
-                        <span className="ml-2 bg-red-100 text-red-800 text-xs px-2 py-1 rounded">Breaking</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2 text-sm text-gray-600 max-w-xs truncate">{headline.content}</td>
-                    <td className="px-4 py-2 text-sm text-gray-600">
-                      {headline.category?.name || 'Uncategorized'}
-                    </td>
-                    <td className="px-4 py-2 text-sm">
-                      <span className={`px-2 py-1 rounded-full text-xs ${
-                        headline.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                      }`}>
-                        {headline.isActive ? 'Active' : 'Inactive'}
-                      </span>
-                    </td>
+                    <td className="px-4 py-2 text-sm text-gray-800">{headline.name}</td>
+                    <td className="px-4 py-2 text-sm text-[#403fbb]">{headline.path}</td>
                     <td className="px-4 py-2 text-sm">
                       <button
                         onClick={() => openHeadlineEditModal(headline)}
@@ -954,16 +802,13 @@ const Dashboard = () => {
             </table>
           </div>
         )}
-        <div className="mt-4 flex justify-between">
+        <div className="mt-4">
           <button
             onClick={handleClearAllHeadlines}
             className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
           >
             Clear All Headlines
           </button>
-          <div className="text-sm text-gray-500">
-            Showing {headlines.length} headlines
-          </div>
         </div>
       </div>
     </div>
