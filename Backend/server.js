@@ -8,6 +8,7 @@ const newspaperRoute = require("./route/newspaperRoutes.js");
 const navlinkRoute = require("./route/navlinkRoutes.js");
 const HeadLineRoute = require("./route/headLineRoutes.js");
 const { createDefaultAdmin } = require("./controller/userController.js") 
+const setupNewspaperPublishing = require("./utils/cron.js");
 
 
 const port = process.env.PORT || 3000;  
@@ -37,4 +38,15 @@ app.listen(port, async () => {
     const currentDate = new Date();
     currentDate.setMinutes(currentDate.getMinutes() + 5);
     console.log(currentDate);
+    setupNewspaperPublishing((err, job) => {
+      if (err) {
+        console.error('Failed to initialize newspaper publishing:', err);
+        // Handle error (maybe exit process?)
+      } else {
+        console.log('Newspaper publishing job successfully scheduled');
+        
+        // You can store the job reference if needed
+        app.locals.newspaperPublishJob = job;
+      }
+    });
   });

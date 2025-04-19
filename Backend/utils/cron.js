@@ -1,33 +1,53 @@
 const cron = require('node-cron');
-const NewspaperDetails = require('./your-model-file'); // Adjust path
+const { NewspaperDetails } = require('../model/NewPaper');
 
-// Runs every day at 00:00 (midnight)
-cron.schedule('0 0 * * *', async () => {
-  try {
-    const now = new Date();
-    console.log(`Running midnight publish check at ${now}`);
-
-    // Find newspapers that should be published today or earlier but aren't yet
-    const newspapersToPublish = await NewspaperDetails.find({
-      publicationDate: { $lte: now },
-      isPublished: false,
-    });
-
-    if (newspapersToPublish.length > 0) {
-      console.log(`Publishing ${newspapersToPublish.length} newspapers...`);
+function setupNewspaperPublishing(callback) {
+  // Reusable publishing function
+  const publishDueNewspapers = async (cb) => {
+    try {
+      const now = new Date();
+      console.log(`Running publish check at ${now}`);
       
-      // Bulk update to mark them as published
-      await NewspaperDetails.updateMany(
-        { _id: { $in: newspapersToPublish.map(n => n._id) } },
+      const result = await NewspaperDetails.updateMany(
+        { publicationDate: { $lte: now }, isPublished: false },
         { $set: { isPublished: true } }
       );
-    } else {
-      console.log('No newspapers to publish today.');
+      
+      console.log(`Published ${result.modifiedCount} newspapers.`);
+      if (cb) cb(null, result);
+    } catch (err) {
+      if (cb) cb(err);
+      else console.error('Publish error:', err);
     }
-  } catch (error) {
-    console.error('Midnight publish job failed:', error);
-  }
-}, {
-  scheduled: true,
-  timezone: "Asia/Kolkata" // Set your timezone (optional)
-});
+  };
+
+  // Set up daily job (change to '0 0 * * *' for midnight)
+  const job = cron.schedule('0 0 * * *', () => {
+    console.log("Starting newspaper publishing...");
+    publishDueNewspapers((err, result) => {
+      if (err) {
+        console.error('Publish job failed:', err);
+      } else {
+        console.log('Publish job completed successfully');
+      }
+    });
+  }, {
+    scheduled: true,
+    timezone: process.env.TZ || "Asia/Kolkata"
+  });
+
+  // Run immediately on startup
+  publishDueNewspapers((err) => {
+    if (err) {
+      console.error('Startup publish failed:', err);
+      if (callback) callback(err);
+    } else {
+      console.log('Startup publish check complete');
+      if (callback) callback(null, job);
+    }
+  });
+
+  return job;
+}
+
+module.exports = setupNewspaperPublishing ;
