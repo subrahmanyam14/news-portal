@@ -341,20 +341,36 @@ export default function ImageViewer() {
 
   const downloadPDF = async () => {
     if (!images.length) return;
-
+  
     setDownloading(true);
     const doc = new jsPDF({ orientation: "portrait", unit: "px", format: "a4" });
-
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+  
     try {
       for (let index = 0; index < images.length; index++) {
         const img = images[index];
         const image = new Image();
         image.src = img.src;
-
+  
         await new Promise((resolve) => {
           image.onload = () => {
             if (index !== 0) doc.addPage();
-            doc.addImage(image, "JPEG", 0, 0, 595, 842);
+  
+            const imgWidth = image.width;
+            const imgHeight = image.height;
+  
+            // Calculate scale factor to fit the image in the page
+            const ratio = Math.min(pageWidth / imgWidth, pageHeight / imgHeight);
+  
+            const scaledWidth = imgWidth * ratio;
+            const scaledHeight = imgHeight * ratio;
+  
+            // Center the image
+            const x = (pageWidth - scaledWidth) / 2;
+            const y = (pageHeight - scaledHeight) / 2;
+  
+            doc.addImage(image, "JPEG", x, y, scaledWidth, scaledHeight);
             resolve();
           };
           image.onerror = () => {
@@ -363,7 +379,7 @@ export default function ImageViewer() {
           };
         });
       }
-
+  
       doc.save(`Newspaper-${selectedDate}.pdf`);
     } catch (err) {
       console.error("Error generating PDF:", err);
@@ -371,6 +387,7 @@ export default function ImageViewer() {
       setDownloading(false);
     }
   };
+  
 
   const nextImage = () => {
     if (!activeImage || !images.length || isFlipping) return;
