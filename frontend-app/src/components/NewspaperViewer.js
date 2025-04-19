@@ -3,7 +3,7 @@ import { jsPDF } from "jspdf";
 import { Download, ChevronLeft, ChevronRight, Calendar, ZoomIn, ZoomOut, Maximize, Minimize, Scissors, X } from "lucide-react";
 import axios from "axios";
 
-// CSS styles for 3D flip animation
+// CSS styles for 3D flip animation and marquee
 const flipStyles = `
   .perspective-1000 {
     perspective: 1000px;
@@ -61,6 +61,21 @@ const flipStyles = `
   .flipping .flip-card-back img {
     box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3);
   }
+
+  /* Marquee styles */
+  .marquee-container {
+    background-color: #1a1a1a;
+    color: white;
+    padding: 8px 0;
+    width: 100%;
+  }
+
+  .marquee a {
+    color: white;
+    text-decoration: none;
+    margin: 0 20px;
+    transition: color 0.3s ease;
+  }
 `;
 
 export default function ImageViewer() {
@@ -93,6 +108,9 @@ export default function ImageViewer() {
   const flipCardRef = useRef(null);
   const clipImageRef = useRef(null);
   const clipContainerRef = useRef(null);
+  const marqueeRef = useRef(null);
+  const [headlines, setHeadlines] = useState([]);
+  const [headlinesLoading, setHeadlinesLoading] = useState(false);
 
   // Helper function to format date as YYYY-MM-DD
   const formatDate = (date) => {
@@ -303,6 +321,23 @@ export default function ImageViewer() {
       fetchNewspaper();
     }
   }, [selectedDate]);
+
+  // Fetch headlines
+  useEffect(() => {
+    const fetchHeadlines = async () => {
+      setHeadlinesLoading(true);
+      try {
+        const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}/headline/get`);
+        setHeadlines(response.data || []);
+      } catch (err) {
+        console.error('Failed to fetch headlines:', err);
+      } finally {
+        setHeadlinesLoading(false);
+      }
+    };
+
+    fetchHeadlines();
+  }, []);
 
   const downloadPDF = async () => {
     if (!images.length) return;
@@ -851,9 +886,35 @@ export default function ImageViewer() {
   }, [isClipping, resizingClipBox, movingClipBox, clipBoxDragStart]);
 
   return (
-    <div className="flex flex-col mt-14">
+    <div className="flex flex-col mt-16">
       {/* Add flip animation styles */}
       <style>{flipStyles}</style>
+
+      {/* Headlines Marquee */}
+      {headlines.length > 0 && !headlinesLoading && (
+        <div className="marquee-container">
+          <marquee
+            ref={marqueeRef}
+            behavior="scroll"
+            direction="left"
+            scrollAmount="5"
+            onMouseOver={() => marqueeRef.current && marqueeRef.current.stop()}
+            onMouseOut={() => marqueeRef.current && marqueeRef.current.start()}
+          >
+            {headlines.map((headline, index) => (
+              <a
+                key={index}
+                href={headline.path}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mr-6 hover:text-blue-500"
+              >
+                ● {headline.name}
+              </a>
+            ))}
+          </marquee>
+        </div>
+      )}
 
       {/* Navbar */}
       <nav className="bg-gray-800 text-white p-4 flex justify-between items-center">
