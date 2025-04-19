@@ -6,6 +6,7 @@ const connectDB = require('./config/db.js');
 const userRoute = require("./route/userRoutes.js");
 const newspaperRoute = require("./route/newspaperRoutes.js");
 const navlinkRoute = require("./route/navlinkRoutes.js");
+const HeadLineRoute = require("./route/headLineRoutes.js");
 const { createDefaultAdmin } = require("./controller/userController.js") 
 
 
@@ -25,6 +26,8 @@ app.use("/user", userRoute);
 app.use("/newspaper", newspaperRoute);
 
 app.use("/navlink", navlinkRoute);
+
+app.use("/headline", HeadLineRoute);
 
 
 app.listen(port, async () => {

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { jsPDF } from "jspdf";
-import { Download, ChevronLeft, ChevronRight, Calendar, ZoomIn, ZoomOut, Maximize, Minimize } from "lucide-react";
+import { Download, ChevronLeft, ChevronRight, Calendar, ZoomIn, ZoomOut, Maximize, Minimize, Scissors, X } from "lucide-react";
 import axios from "axios";
 
 // CSS styles for 3D flip animation
@@ -80,10 +80,19 @@ export default function ImageViewer() {
   const [noTransition, setNoTransition] = useState(false);
   const [flipDirection, setFlipDirection] = useState('');
   const [nextImageToShow, setNextImageToShow] = useState(null);
+  const [isClipping, setIsClipping] = useState(false);
+  const [clipBox, setClipBox] = useState({ x: 0, y: 0, width: 200, height: 200 });
+  const [resizingClipBox, setResizingClipBox] = useState(false);
+  const [resizeDirection, setResizeDirection] = useState(null);
+  const [movingClipBox, setMovingClipBox] = useState(false);
+  const [clipBoxDragStart, setClipBoxDragStart] = useState({ x: 0, y: 0 });
+  const [clipImageLoading, setClipImageLoading] = useState(false);
   const zoomedImageRef = useRef(null);
   const containerRef = useRef(null);
   const imageRef = useRef(null);
   const flipCardRef = useRef(null);
+  const clipImageRef = useRef(null);
+  const clipContainerRef = useRef(null);
 
   // Helper function to format date as YYYY-MM-DD
   const formatDate = (date) => {
@@ -124,31 +133,31 @@ export default function ImageViewer() {
   // Enhanced zoom to point functionality
   const zoomToPoint = (e, newZoomLevel) => {
     if (!containerRef.current || !imageRef.current) return;
-    
+
     // Get container dimensions and mouse position
     const containerRect = containerRef.current.getBoundingClientRect();
     const mouseX = e.clientX - containerRect.left;
     const mouseY = e.clientY - containerRect.top;
-    
+
     // Calculate current and new zoom factors
     const currentZoom = zoomLevel / 100;
     const newZoom = newZoomLevel / 100;
-    
+
     // Calculate the mouse position relative to the image center
     const relativeX = mouseX - containerRect.width / 2 - position.x;
     const relativeY = mouseY - containerRect.height / 2 - position.y;
-    
+
     // Calculate the new position to zoom toward the mouse pointer
     const newX = position.x - (relativeX * (newZoom / currentZoom - 1));
     const newY = position.y - (relativeY * (newZoom / currentZoom - 1));
-    
+
     // Apply constraints
     const constraints = calculateConstraints(newZoomLevel);
     setPosition({
       x: Math.min(Math.max(newX, constraints.minX), constraints.maxX),
       y: Math.min(Math.max(newY, constraints.minY), constraints.maxY)
     });
-    
+
     setZoomLevel(newZoomLevel);
   };
 
@@ -424,12 +433,12 @@ export default function ImageViewer() {
   // Enhanced wheel handler for smooth zooming
   const handleWheel = (e) => {
     e.preventDefault();
-    
+
     // Calculate new zoom level based on wheel direction
     const delta = e.deltaY < 0 ? 1 : -1;
     const zoomStep = 10; // Smaller steps for smoother zooming
     const newZoom = Math.min(Math.max(zoomLevel + (delta * zoomStep), 50), calculateMaxZoom());
-    
+
     // Only zoom if we're actually changing zoom level
     if (newZoom !== zoomLevel) {
       zoomToPoint(e, newZoom);
@@ -591,6 +600,256 @@ export default function ImageViewer() {
     );
   };
 
+  // Function to toggle the clipping mode
+  const toggleClippingMode = () => {
+    if (!activeImage) return;
+
+    if (!isClipping) {
+      // When entering clip mode, initialize the clip box in the center
+      if (containerRef.current) {
+        const container = containerRef.current.getBoundingClientRect();
+        setClipBox({
+          x: container.width / 2 - 150,
+          y: container.height / 2 - 100,
+          width: 300,
+          height: 200
+        });
+      }
+    }
+
+    setIsClipping(!isClipping);
+  };
+
+  // Function to handle resize start for clip box
+  const handleResizeStart = (e, direction) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setResizingClipBox(true);
+    setResizeDirection(direction);
+    setClipBoxDragStart({ x: e.clientX, y: e.clientY });
+  };
+
+  // Function to handle move start for clip box
+  const handleMoveStart = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setMovingClipBox(true);
+    setClipBoxDragStart({ x: e.clientX, y: e.clientY });
+  };
+
+  // Function to handle mouse movements when resizing or moving clip box
+  const handleClipBoxMove = (e) => {
+    if (!resizingClipBox && !movingClipBox) return;
+
+    e.preventDefault();
+
+    const dx = e.clientX - clipBoxDragStart.x;
+    const dy = e.clientY - clipBoxDragStart.y;
+
+    if (movingClipBox) {
+      // Move the entire box
+      setClipBox(prev => {
+        // Calculate new position
+        let newX = prev.x + dx;
+        let newY = prev.y + dy;
+
+        // Apply boundaries if we have a container
+        if (clipContainerRef.current) {
+          const bounds = clipContainerRef.current.getBoundingClientRect();
+
+          // Ensure the box stays within the image bounds
+          newX = Math.max(0, Math.min(newX, bounds.width - prev.width));
+          newY = Math.max(0, Math.min(newY, bounds.height - prev.height));
+        }
+
+        return { ...prev, x: newX, y: newY };
+      });
+    } else if (resizingClipBox) {
+      // Resize the box based on the direction
+      setClipBox(prev => {
+        let newBox = { ...prev };
+
+        // Minimum dimensions to prevent box becoming too small
+        const MIN_WIDTH = 50;
+        const MIN_HEIGHT = 50;
+
+        switch (resizeDirection) {
+          case 'e': // Right edge
+            newBox.width = Math.max(MIN_WIDTH, prev.width + dx);
+            break;
+          case 'w': // Left edge
+            const newWidthW = Math.max(MIN_WIDTH, prev.width - dx);
+            if (newWidthW !== prev.width) {
+              newBox.x = prev.x + (prev.width - newWidthW);
+              newBox.width = newWidthW;
+            }
+            break;
+          case 's': // Bottom edge
+            newBox.height = Math.max(MIN_HEIGHT, prev.height + dy);
+            break;
+          case 'n': // Top edge
+            const newHeightN = Math.max(MIN_HEIGHT, prev.height - dy);
+            if (newHeightN !== prev.height) {
+              newBox.y = prev.y + (prev.height - newHeightN);
+              newBox.height = newHeightN;
+            }
+            break;
+          case 'se': // Bottom-right corner
+            newBox.width = Math.max(MIN_WIDTH, prev.width + dx);
+            newBox.height = Math.max(MIN_HEIGHT, prev.height + dy);
+            break;
+          case 'sw': // Bottom-left corner
+            const newWidthSW = Math.max(MIN_WIDTH, prev.width - dx);
+            if (newWidthSW !== prev.width) {
+              newBox.x = prev.x + (prev.width - newWidthSW);
+              newBox.width = newWidthSW;
+            }
+            newBox.height = Math.max(MIN_HEIGHT, prev.height + dy);
+            break;
+          case 'ne': // Top-right corner
+            newBox.width = Math.max(MIN_WIDTH, prev.width + dx);
+            const newHeightNE = Math.max(MIN_HEIGHT, prev.height - dy);
+            if (newHeightNE !== prev.height) {
+              newBox.y = prev.y + (prev.height - newHeightNE);
+              newBox.height = newHeightNE;
+            }
+            break;
+          case 'nw': // Top-left corner
+            const newWidthNW = Math.max(MIN_WIDTH, prev.width - dx);
+            if (newWidthNW !== prev.width) {
+              newBox.x = prev.x + (prev.width - newWidthNW);
+              newBox.width = newWidthNW;
+            }
+            const newHeightNW = Math.max(MIN_HEIGHT, prev.height - dy);
+            if (newHeightNW !== prev.height) {
+              newBox.y = prev.y + (prev.height - newHeightNW);
+              newBox.height = newHeightNW;
+            }
+            break;
+          default:
+            break;
+        }
+
+        // Apply boundaries if we have a container
+        if (clipContainerRef.current) {
+          const bounds = clipContainerRef.current.getBoundingClientRect();
+
+          // Ensure the box stays within the image bounds
+          if (newBox.x < 0) {
+            newBox.width += newBox.x;
+            newBox.x = 0;
+          }
+
+          if (newBox.y < 0) {
+            newBox.height += newBox.y;
+            newBox.y = 0;
+          }
+
+          if (newBox.x + newBox.width > bounds.width) {
+            newBox.width = bounds.width - newBox.x;
+          }
+
+          if (newBox.y + newBox.height > bounds.height) {
+            newBox.height = bounds.height - newBox.y;
+          }
+        }
+
+        return newBox;
+      });
+    }
+
+    // Update the drag start position
+    setClipBoxDragStart({ x: e.clientX, y: e.clientY });
+  };
+
+  // Function to handle mouse up for clip box interactions
+  const handleClipBoxRelease = () => {
+    setResizingClipBox(false);
+    setMovingClipBox(false);
+  };
+
+  // Function to download the cropped image
+  const downloadClippedImage = async () => {
+    if (!activeImage || !clipContainerRef.current) return;
+
+    setClipImageLoading(true);
+
+    try {
+      // Create an offscreen canvas
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+
+      // Create a new image for drawing to canvas
+      const img = new Image();
+      img.crossOrigin = 'Anonymous';
+
+      // Load the image
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+        img.src = activeImage.src;
+      });
+
+      // Get the original image dimensions
+      const imgWidth = img.naturalWidth;
+      const imgHeight = img.naturalHeight;
+
+      // Get the clip container dimensions
+      const containerRect = clipContainerRef.current.getBoundingClientRect();
+
+      // Calculate the scaling factors between the displayed image and the original image
+      const scaleX = imgWidth / containerRect.width;
+      const scaleY = imgHeight / containerRect.height;
+
+      // Calculate the actual clip dimensions in the original image
+      const actualX = clipBox.x * scaleX;
+      const actualY = clipBox.y * scaleY;
+      const actualWidth = clipBox.width * scaleX;
+      const actualHeight = clipBox.height * scaleY;
+
+      // Set the canvas dimensions to the clipped area size
+      canvas.width = actualWidth;
+      canvas.height = actualHeight;
+
+      // Draw only the clipped portion of the image
+      ctx.drawImage(
+        img,
+        actualX, actualY, actualWidth, actualHeight,
+        0, 0, actualWidth, actualHeight
+      );
+
+      // Convert canvas to blob and download
+      canvas.toBlob((blob) => {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `newspaper-clip-${selectedDate}.jpg`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        setClipImageLoading(false);
+      }, 'image/jpeg', 0.9);
+
+    } catch (err) {
+      console.error('Error clipping image:', err);
+      setClipImageLoading(false);
+    }
+  };
+
+  // Add event listeners for global mouse movements when clipping
+  useEffect(() => {
+    if (isClipping) {
+      window.addEventListener('mousemove', handleClipBoxMove);
+      window.addEventListener('mouseup', handleClipBoxRelease);
+
+      return () => {
+        window.removeEventListener('mousemove', handleClipBoxMove);
+        window.removeEventListener('mouseup', handleClipBoxRelease);
+      };
+    }
+  }, [isClipping, resizingClipBox, movingClipBox, clipBoxDragStart]);
+
   return (
     <div className="flex flex-col mt-14">
       {/* Add flip animation styles */}
@@ -687,20 +946,34 @@ export default function ImageViewer() {
             </select>
           </>
         )}
-        <button
-          className="bg-green-500 px-2 md:px-4 py-2 rounded flex items-center relative hover:bg-green-600 transition-colors"
-          onClick={downloadPDF}
-          disabled={downloading || !images.length}
-        >
-          {downloading && (
-            <div className="absolute inset-0 flex items-center justify-center bg-green-500 bg-opacity-50">
-              <div className="w-5 h-5 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
-            </div>
-          )}
-          <span className={`flex gap-2 ${downloading ? "opacity-0" : "opacity-100"}`}>
-            <Download size={20} /> <span className="hidden md:block"> PDF</span>
-          </span>
-        </button>
+        <div className="flex gap-2">
+          {/* Clip Button */}
+          <button
+            className={`px-2 md:px-4 py-2 rounded flex items-center relative hover:bg-green-600 transition-colors ${isClipping ? 'bg-green-600' : 'bg-green-500'}`}
+            onClick={toggleClippingMode}
+            disabled={!activeImage || loading}
+          >
+            <span className="flex gap-2">
+              <Scissors size={20} /> <span className="hidden md:block">Clip</span>
+            </span>
+          </button>
+
+          {/* Download Button */}
+          <button
+            className="bg-green-500 px-2 md:px-4 py-2 rounded flex items-center relative hover:bg-green-600 transition-colors"
+            onClick={downloadPDF}
+            disabled={downloading || !images.length}
+          >
+            {downloading && (
+              <div className="absolute inset-0 flex items-center justify-center bg-green-500 bg-opacity-50">
+                <div className="w-5 h-5 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            )}
+            <span className={`flex gap-2 ${downloading ? "opacity-0" : "opacity-100"}`}>
+              <Download size={20} /> <span className="hidden md:block">PDF</span>
+            </span>
+          </button>
+        </div>
       </nav>
 
       {/* Main Content */}
@@ -725,7 +998,7 @@ export default function ImageViewer() {
               <button
                 className="absolute left-2 top-1/2 transform -translate-y-1/2 bg-gray-700 p-2 rounded-full text-white hover:bg-gray-600 disabled:opacity-50 z-10 transition-all duration-300 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:hover:bg-gray-400"
                 onClick={prevImage}
-                disabled={images.length <= 1 || isFlipping || activeImage?.id === 1}
+                disabled={images.length <= 1 || isFlipping || activeImage?.id === 1 || isClipping}
                 aria-label="Previous page"
               >
                 <ChevronLeft size={24} />
@@ -744,12 +1017,95 @@ export default function ImageViewer() {
                 >
                   {/* Current Active Image - Front */}
                   <div className="flip-card-front">
-                    <img
-                      src={activeImage.src}
-                      alt={`Page ${activeImage.id}`}
-                      className="shadow-lg border-2 border-gray-400 cursor-zoom-in max-h-[70vh] object-contain"
-                      onClick={() => setIsZoomed(true)}
-                    />
+                    {isClipping ? (
+                      <div className="relative" ref={clipContainerRef}>
+                        <img
+                          src={activeImage.src}
+                          alt={`Page ${activeImage.id}`}
+                          className="shadow-lg border-2 border-gray-400 max-h-[70vh] object-contain"
+                          ref={clipImageRef}
+                        />
+
+                        {/* Overlay with semi-transparent background */}
+                        <div className="absolute inset-0 bg-black bg-opacity-70">
+                          {/* Clip area (transparent window) */}
+                          <div
+                            className="absolute cursor-move"
+                            style={{
+                              left: `${clipBox.x}px`,
+                              top: `${clipBox.y}px`,
+                              width: `${clipBox.width}px`,
+                              height: `${clipBox.height}px`,
+                            }}
+                            onMouseDown={handleMoveStart}
+                          >
+                            {/* Clear area to see the image */}
+                            <div className="absolute inset-0 bg-transparent border-2 border-white rounded-md border-dashed"></div>
+
+                            {/* Resize handles */}
+                            <div
+                              className="absolute w-4 h-4 cursor-nwse-resize right-0 bottom-0 transform translate-x-1/2 translate-y-1/2"
+                              onMouseDown={(e) => handleResizeStart(e, 'se')}
+                            >
+                              <div className="absolute inset-0 bg-white rounded-full w-2 h-2 transform -translate-x-1/2 -translate-y-1/2"></div>
+                            </div>
+                            <div
+                              className="absolute w-4 h-4 cursor-nesw-resize left-0 bottom-0 transform translate-x-1/2 translate-y-1/2"
+                              onMouseDown={(e) => handleResizeStart(e, 'sw')}
+                            >
+                              <div className="absolute inset-0 bg-white rounded-full w-2 h-2 transform -translate-x-1/2 -translate-y-1/2"></div>
+                            </div>
+                            <div
+                              className="absolute w-4 h-4 cursor-nesw-resize right-0 top-0 transform translate-x-1/2 translate-y-1/2"
+                              onMouseDown={(e) => handleResizeStart(e, 'ne')}
+                            >
+                              <div className="absolute inset-0 bg-white rounded-full w-2 h-2 transform -translate-x-1/2 -translate-y-1/2"></div>
+                            </div>
+                            <div
+                              className="absolute w-4 h-4 cursor-nwse-resize left-0 top-0 transform translate-x-1/2 translate-y-1/2"
+                              onMouseDown={(e) => handleResizeStart(e, 'nw')}
+                            >
+                              <div className="absolute inset-0 bg-white rounded-full w-2 h-2 transform -translate-x-1/2 -translate-y-1/2"></div>
+                            </div>
+
+                            {/* Action buttons */}
+                            <div className="absolute -top-6 right-0 flex gap-2">
+                              <button
+                                className="bg-green-500 text-white px-2 py-1 rounded-md flex items-center gap-2 hover:bg-green-600 transition-colors shadow-md"
+                                onClick={downloadClippedImage}
+                                disabled={clipImageLoading}
+                              >
+                                {clipImageLoading ? (
+                                  <div className="border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                ) : (
+                                  <>
+                                    <Download size={16} />
+                                  </>
+                                )}
+                              </button>
+                              <button
+                                className="bg-red-500 text-white px-2 py-1 rounded-md flex items-center gap-2 hover:bg-red-600 transition-colors shadow-md"
+                                onClick={toggleClippingMode}
+                              >
+                                <X size={16} />
+                              </button>
+                            </div>
+
+                            {/* Dimensions display */}
+                            <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 text-white text-sm bg-black bg-opacity-50 px-2 py-1 rounded">
+                              {Math.round(clipBox.width)} x {Math.round(clipBox.height)} px
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <img
+                        src={activeImage.src}
+                        alt={`Page ${activeImage.id}`}
+                        className="shadow-lg border-2 border-gray-400 cursor-zoom-in max-h-[70vh] object-contain"
+                        onClick={() => setIsZoomed(true)}
+                      />
+                    )}
                   </div>
 
                   {/* Next Image To Show - Back */}
@@ -766,7 +1122,7 @@ export default function ImageViewer() {
               <button
                 className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-gray-700 p-2 rounded-full text-white hover:bg-gray-600 disabled:opacity-50 z-10 transition-all duration-300 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:hover:bg-gray-400"
                 onClick={nextImage}
-                disabled={images.length <= 1 || isFlipping || activeImage?.id === images.length}
+                disabled={images.length <= 1 || isFlipping || activeImage?.id === images.length || isClipping}
                 aria-label="Next page"
               >
                 <ChevronRight size={24} />
@@ -779,7 +1135,7 @@ export default function ImageViewer() {
         {renderPagination()}
 
         {/* Bottom Preview - All Images */}
-        {images.length > 0 && (
+        {images.length > 0 && !isClipping && (
           <div className="w-full overflow-x-auto p-2 flex gap-2 justify-center">
             {images.map((img) => (
               <img
