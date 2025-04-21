@@ -5,7 +5,7 @@ const poppler = require('pdf-poppler');
 const sharp = require('sharp');
 const fs = require('fs');
 const path = require('path');
-const { promisify } = require('util');
+const { promisify } = require('util')
 const cloudinary = require('../cloudinary/config');
 const {NewspaperDetails} = require('../model/NewPaper');
 
@@ -466,6 +466,26 @@ const deleteNewspaper = async( req, res ) => {
   }
 }
 
+const uploadImage = async (req, res) => {
+  try {
+      const result = await cloudinary.uploader.upload(req.file.path, {
+          folder: 'uploads', // Optional folder name in Cloudinary
+      });
+
+      // Delete local file after upload
+      fs.unlinkSync(req.file.path);
+
+      res.status(200).json({
+          message: 'Image uploaded successfully',
+          url: result.secure_url,
+          public_id: result.public_id,
+      });
+  } catch (error) {
+    console.log("Error in the uploadImage: ", error);
+      res.status(500).json({ message: 'Upload failed', error: error.message });
+  }
+}
+
 module.exports = {
   uploadNewspaper: [upload.single('pdf'), uploadNewspaper],
   getLatestNewspaper,
@@ -473,5 +493,6 @@ module.exports = {
   getAvailableDates,
   getNewspaperByPagination,
   deleteNewspaper,
-  getNewspapersIncludeFuture
+  getNewspapersIncludeFuture,
+  uploadImage
 };

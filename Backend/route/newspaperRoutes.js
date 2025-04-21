@@ -1,8 +1,12 @@
 // newspaperRoutes.js
 const express = require('express');
 const router = express.Router();
-const { getNewspapersIncludeFuture, getLatestNewspaper, getNewspaperByDate, getNewspaperByPagination, getAvailableDates, deleteNewspaper, uploadNewspaper } = require('../controller/newspaperController');
+const multer = require("multer");
+const { getNewspapersIncludeFuture, getLatestNewspaper, getNewspaperByDate, getNewspaperByPagination, getAvailableDates, deleteNewspaper, uploadNewspaper, uploadImage } = require('../controller/newspaperController');
 
+const upload = multer({ dest: 'temp/' }); // Temporary storage
+
+router.post('/upload', upload.single('image'), uploadImage);
 
 // Public access
 router.get('/', getLatestNewspaper);

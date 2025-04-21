@@ -341,35 +341,35 @@ export default function ImageViewer() {
 
   const downloadPDF = async () => {
     if (!images.length) return;
-  
+
     setDownloading(true);
     const doc = new jsPDF({ orientation: "portrait", unit: "px", format: "a4" });
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
-  
+
     try {
       for (let index = 0; index < images.length; index++) {
         const img = images[index];
         const image = new Image();
         image.src = img.src;
-  
+
         await new Promise((resolve) => {
           image.onload = () => {
             if (index !== 0) doc.addPage();
-  
+
             const imgWidth = image.width;
             const imgHeight = image.height;
-  
+
             // Calculate scale factor to fit the image in the page
             const ratio = Math.min(pageWidth / imgWidth, pageHeight / imgHeight);
-  
+
             const scaledWidth = imgWidth * ratio;
             const scaledHeight = imgHeight * ratio;
-  
+
             // Center the image
             const x = (pageWidth - scaledWidth) / 2;
             const y = (pageHeight - scaledHeight) / 2;
-  
+
             doc.addImage(image, "JPEG", x, y, scaledWidth, scaledHeight);
             resolve();
           };
@@ -379,7 +379,7 @@ export default function ImageViewer() {
           };
         });
       }
-  
+
       doc.save(`Newspaper-${selectedDate}.pdf`);
     } catch (err) {
       console.error("Error generating PDF:", err);
@@ -387,7 +387,7 @@ export default function ImageViewer() {
       setDownloading(false);
     }
   };
-  
+
 
   const nextImage = () => {
     if (!activeImage || !images.length || isFlipping) return;
@@ -821,20 +821,44 @@ export default function ImageViewer() {
   };
 
   // Function to download the cropped image
-  const downloadClippedImage = async () => {
-    if (!activeImage || !clipContainerRef.current) return;
+  // Function to upload the image and get the URL
+  const uploadImage = async (blob) => {
+    try {
+      // Create a FormData object to send the image
+      const formData = new FormData();
+      formData.append('image', blob, `newspaper-clip-${selectedDate}.jpg`);
 
+      // Make the POST request to your upload endpoint
+      const response = await fetch('http://localhost:5002/newspaper/upload', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        throw new Error(`Upload failed with status: ${response.status}`);
+      }
+
+      // Parse the response to get the URL
+      const data = await response.json();
+      return data.url; // This returns the cloudinary URL from your response
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      throw error;
+    }
+  };
+
+  // Modified function to handle both download and sharing
+  const handleClippedImage = async (action) => {
+    if (!activeImage || !clipContainerRef.current) return;
     setClipImageLoading(true);
 
     try {
       // Create an offscreen canvas
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
-
       // Create a new image for drawing to canvas
       const img = new Image();
       img.crossOrigin = 'Anonymous';
-
       // Load the image
       await new Promise((resolve, reject) => {
         img.onload = resolve;
@@ -845,24 +869,19 @@ export default function ImageViewer() {
       // Get the original image dimensions
       const imgWidth = img.naturalWidth;
       const imgHeight = img.naturalHeight;
-
       // Get the clip container dimensions
       const containerRect = clipContainerRef.current.getBoundingClientRect();
-
       // Calculate the scaling factors between the displayed image and the original image
       const scaleX = imgWidth / containerRect.width;
       const scaleY = imgHeight / containerRect.height;
-
       // Calculate the actual clip dimensions in the original image
       const actualX = clipBox.x * scaleX;
       const actualY = clipBox.y * scaleY;
       const actualWidth = clipBox.width * scaleX;
       const actualHeight = clipBox.height * scaleY;
-
       // Set the canvas dimensions to the clipped area size
       canvas.width = actualWidth;
       canvas.height = actualHeight;
-
       // Draw only the clipped portion of the image
       ctx.drawImage(
         img,
@@ -870,8 +889,13 @@ export default function ImageViewer() {
         0, 0, actualWidth, actualHeight
       );
 
-      // Convert canvas to blob and download
-      canvas.toBlob((blob) => {
+      // Get the blob from the canvas
+      const blob = await new Promise(resolve => {
+        canvas.toBlob(resolve, 'image/jpeg', 0.9);
+      });
+
+      if (action === 'download') {
+        // Handle download
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
@@ -880,14 +904,30 @@ export default function ImageViewer() {
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
-        setClipImageLoading(false);
-      }, 'image/jpeg', 0.9);
+      }
+      else if (action === 'facebook' || action === 'whatsapp') {
+        // For sharing, upload the image first to get a public URL
+        const publicImageUrl = await uploadImage(blob);
 
+        // Then open the appropriate sharing link
+        if (action === 'facebook') {
+          window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(publicImageUrl)}`, '_blank');
+        } else if (action === 'whatsapp') {
+          window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent('Check out this newspaper clipping! ' + publicImageUrl)}`, '_blank');
+        }
+      }
     } catch (err) {
-      console.error('Error clipping image:', err);
+      console.error('Error processing image:', err);
+      alert('An error occurred while processing the image.');
+    } finally {
       setClipImageLoading(false);
     }
   };
+
+  // Function wrappers for the specific actions
+  const downloadClippedImage = () => handleClippedImage('download');
+  const shareToFacebook = () => handleClippedImage('facebook');
+  const shareToWhatsApp = () => handleClippedImage('whatsapp');
 
   // Add event listeners for global mouse movements when clipping
   useEffect(() => {
@@ -1147,23 +1187,50 @@ export default function ImageViewer() {
                             </div>
 
                             {/* Action buttons */}
+                            {/* Action buttons */}
                             <div className="absolute -top-6 right-0 flex gap-2">
                               <button
                                 className="bg-green-500 text-white px-2 py-1 rounded-md flex items-center gap-2 hover:bg-green-600 transition-colors shadow-md"
                                 onClick={downloadClippedImage}
                                 disabled={clipImageLoading}
+                                aria-label="Download image"
                               >
                                 {clipImageLoading ? (
-                                  <div className="border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                                 ) : (
-                                  <>
-                                    <Download size={16} />
-                                  </>
+                                  <Download size={16} />
                                 )}
                               </button>
+
+                              {/* Facebook share button */}
+                              <button
+                                className="bg-blue-600 text-white px-2 py-1 rounded-md flex items-center gap-2 hover:bg-blue-700 transition-colors shadow-md"
+                                onClick={shareToFacebook}
+                                disabled={clipImageLoading}
+                                aria-label="Share to Facebook"
+                              >
+                                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                                  <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+                                </svg>
+                              </button>
+
+                              {/* WhatsApp share button */}
+                              <button
+                                className="bg-green-600 text-white px-2 py-1 rounded-md flex items-center gap-2 hover:bg-green-700 transition-colors shadow-md"
+                                onClick={shareToWhatsApp}
+                                disabled={clipImageLoading}
+                                aria-label="Share to WhatsApp"
+                              >
+                                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+                                </svg>
+                              </button>
+
+                              {/* Cancel/Close button */}
                               <button
                                 className="bg-red-500 text-white px-2 py-1 rounded-md flex items-center gap-2 hover:bg-red-600 transition-colors shadow-md"
                                 onClick={toggleClippingMode}
+                                aria-label="Close clipping mode"
                               >
                                 <X size={16} />
                               </button>
