@@ -468,23 +468,29 @@ const deleteNewspaper = async( req, res ) => {
 
 const uploadImage = async (req, res) => {
   try {
-      const result = await cloudinary.uploader.upload(req.file.path, {
-          folder: 'uploads', // Optional folder name in Cloudinary
-      });
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
 
-      // Delete local file after upload
-      fs.unlinkSync(req.file.path);
+    const result = await cloudinary.uploader.upload(req.file.path, {
+      folder: 'uploads',
+    });
 
-      res.status(200).json({
-          message: 'Image uploaded successfully',
-          url: result.secure_url,
-          public_id: result.public_id,
-      });
+    // Delete local file after successful upload
+    fs.unlink(req.file.path, (err) => {
+      if (err) console.error('Error deleting temp file:', err);
+    });
+
+    res.status(200).json({
+      message: 'Image uploaded successfully',
+      url: result.secure_url,
+      public_id: result.public_id,
+    });
   } catch (error) {
-    console.log("Error in the uploadImage: ", error);
-      res.status(500).json({ message: 'Upload failed', error: error.message });
+    console.error("Error in the uploadImage:", error);
+    res.status(500).json({ message: 'Upload failed', error: error.message });
   }
-}
+};
 
 module.exports = {
   uploadNewspaper: [upload.single('pdf'), uploadNewspaper],
