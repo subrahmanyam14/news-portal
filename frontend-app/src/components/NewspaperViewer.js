@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from "react";
-import { jsPDF } from "jspdf";
-import { Download, ChevronLeft, ChevronRight, Calendar, ZoomIn, ZoomOut, Maximize, Minimize, Scissors, X } from "lucide-react";
 import axios from "axios";
+import { jsPDF } from "jspdf";
+import { Calendar, ChevronLeft, ChevronRight, Download, Maximize, Minimize, Scissors, X, ZoomIn, ZoomOut } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 // CSS styles for 3D flip animation and marquee
 const flipStyles = `
@@ -509,6 +509,7 @@ export default function ImageViewer() {
   };
 
   const handleTouchMove = (e) => {
+    // Handle for both zoom and clipping interactions
     if (isDragging && e.touches.length === 1 && zoomLevel > 75) {
       e.preventDefault(); // Prevent page scroll
 
@@ -526,6 +527,23 @@ export default function ImageViewer() {
         x: e.touches[0].clientX,
         y: e.touches[0].clientY
       });
+    } 
+    else if (resizingClipBox || movingClipBox) {
+      e.preventDefault(); // Prevent scrolling
+
+      // Get the first touch point
+      const touch = e.touches[0];
+      
+      // Create a synthetic mouse event for your existing handler
+      const mouseEvent = {
+        clientX: touch.clientX,
+        clientY: touch.clientY,
+        preventDefault: () => e.preventDefault(),
+        stopPropagation: () => e.stopPropagation()
+      };
+      
+      // Use your existing mouse move handler
+      handleClipBoxMove(mouseEvent);
     }
   };
 
@@ -674,29 +692,47 @@ export default function ImageViewer() {
 
   // Function to handle resize start for clip box
   const handleResizeStart = (e, direction) => {
-    e.preventDefault();
-    e.stopPropagation();
+    e.preventDefault && e.preventDefault();
+    e.stopPropagation && e.stopPropagation();
+    
     setResizingClipBox(true);
     setResizeDirection(direction);
-    setClipBoxDragStart({ x: e.clientX, y: e.clientY });
+    
+    // Check if it's a touch event
+    if (e.type === 'touchstart') {
+      setClipBoxDragStart({ x: e.clientX, y: e.clientY });
+    } else {
+      setClipBoxDragStart({ x: e.clientX, y: e.clientY });
+    }
   };
 
   // Function to handle move start for clip box
   const handleMoveStart = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
+    e.preventDefault && e.preventDefault();
+    e.stopPropagation && e.stopPropagation();
+    
     setMovingClipBox(true);
-    setClipBoxDragStart({ x: e.clientX, y: e.clientY });
+    
+    // Check if it's a touch event
+    if (e.type === 'touchstart') {
+      setClipBoxDragStart({ x: e.clientX, y: e.clientY });
+    } else {
+      setClipBoxDragStart({ x: e.clientX, y: e.clientY });
+    }
   };
 
   // Function to handle mouse movements when resizing or moving clip box
   const handleClipBoxMove = (e) => {
     if (!resizingClipBox && !movingClipBox) return;
 
-    e.preventDefault();
+    e.preventDefault && e.preventDefault();
+    e.stopPropagation && e.stopPropagation();
 
-    const dx = e.clientX - clipBoxDragStart.x;
-    const dy = e.clientY - clipBoxDragStart.y;
+    const currentX = e.clientX;
+    const currentY = e.clientY;
+    
+    const dx = currentX - clipBoxDragStart.x;
+    const dy = currentY - clipBoxDragStart.y;
 
     if (movingClipBox) {
       // Move the entire box
@@ -810,8 +846,8 @@ export default function ImageViewer() {
       });
     }
 
-    // Update the drag start position
-    setClipBoxDragStart({ x: e.clientX, y: e.clientY });
+    // Update drag start position
+    setClipBoxDragStart({ x: currentX, y: currentY });
   };
 
   // Function to handle mouse up for clip box interactions
@@ -932,15 +968,60 @@ export default function ImageViewer() {
   // Add event listeners for global mouse movements when clipping
   useEffect(() => {
     if (isClipping) {
-      window.addEventListener('mousemove', handleClipBoxMove);
-      window.addEventListener('mouseup', handleClipBoxRelease);
+      const documentTouchMove = (e) => {
+        if (resizingClipBox || movingClipBox) {
+          e.preventDefault(); // Prevent scrolling
+          
+          if (e.touches && e.touches[0]) {
+            const touch = e.touches[0];
+            const mouseEvent = {
+              clientX: touch.clientX,
+              clientY: touch.clientY,
+              preventDefault: () => {},
+              stopPropagation: () => {}
+            };
+            
+            handleClipBoxMove(mouseEvent);
+          }
+        }
+      };
+      
+      const documentTouchEnd = () => {
+        setResizingClipBox(false);
+        setMovingClipBox(false);
+      };
+      
+      // Add with passive: false to ensure preventDefault works
+      document.addEventListener('touchmove', documentTouchMove, { passive: false });
+      document.addEventListener('touchend', documentTouchEnd);
+      document.addEventListener('touchcancel', documentTouchEnd);
+      
+      // Existing mouse handlers
+      document.addEventListener('mousemove', handleClipBoxMove);
+      document.addEventListener('mouseup', handleClipBoxRelease);
 
       return () => {
-        window.removeEventListener('mousemove', handleClipBoxMove);
-        window.removeEventListener('mouseup', handleClipBoxRelease);
+        document.removeEventListener('touchmove', documentTouchMove);
+        document.removeEventListener('touchend', documentTouchEnd);
+        document.removeEventListener('touchcancel', documentTouchEnd);
+        document.removeEventListener('mousemove', handleClipBoxMove);
+        document.removeEventListener('mouseup', handleClipBoxRelease);
       };
     }
   }, [isClipping, resizingClipBox, movingClipBox, clipBoxDragStart]);
+
+  // Add this debugging function
+  const logTouchEvent = (name, e) => {
+    console.log(`${name}:`, {
+      type: e.type,
+      touches: e.touches?.length,
+      clientX: e.touches?.[0]?.clientX || e.clientX,
+      clientY: e.touches?.[0]?.clientY || e.clientY,
+      moving: movingClipBox,
+      resizing: resizingClipBox,
+      clipBox: { ...clipBox }
+    });
+  };
 
   return (
     <div className="flex flex-col mt-16">
@@ -1148,7 +1229,7 @@ export default function ImageViewer() {
                         <div className="absolute inset-0 bg-black bg-opacity-70">
                           {/* Clip area (transparent window) */}
                           <div
-                            className="absolute cursor-move"
+                            className="absolute cursor-move touch-none"
                             style={{
                               left: `${clipBox.x}px`,
                               top: `${clipBox.y}px`,
@@ -1156,37 +1237,105 @@ export default function ImageViewer() {
                               height: `${clipBox.height}px`,
                             }}
                             onMouseDown={handleMoveStart}
+                            onTouchStart={(e) => {
+                              logTouchEvent('touchstart', e);
+                              e.preventDefault();
+                              const touch = e.touches[0];
+                              const mouseEvent = {
+                                type: 'touchstart',
+                                clientX: touch.clientX,
+                                clientY: touch.clientY,
+                                preventDefault: () => {},
+                                stopPropagation: () => {}
+                              };
+                              handleMoveStart(mouseEvent);
+                            }}
                           >
                             {/* Clear area to see the image */}
                             <div className="absolute inset-0 bg-transparent border-2 border-white rounded-md border-dashed"></div>
 
                             {/* Resize handles */}
                             <div
-                              className="absolute w-4 h-4 cursor-nwse-resize right-0 bottom-0 transform translate-x-1/2 translate-y-1/2"
+                              className="absolute w-8 h-8 cursor-nwse-resize right-0 bottom-0 transform translate-x-1/2 translate-y-1/2 touch-none"
                               onMouseDown={(e) => handleResizeStart(e, 'se')}
+                              onTouchStart={(e) => {
+                                logTouchEvent('touchstart', e);
+                                e.preventDefault();
+                                e.stopPropagation();
+                                const touch = e.touches[0];
+                                const mouseEvent = {
+                                  type: 'touchstart',
+                                  clientX: touch.clientX,
+                                  clientY: touch.clientY,
+                                  preventDefault: () => {},
+                                  stopPropagation: () => {}
+                                };
+                                handleResizeStart(mouseEvent, 'se');
+                              }}
                             >
-                              <div className="absolute inset-0 bg-white rounded-full w-2 h-2 transform -translate-x-1/2 -translate-y-1/2"></div>
+                              <div className="absolute inset-0 bg-white rounded-full w-4 h-4 transform -translate-x-1/2 -translate-y-1/2"></div>
                             </div>
                             <div
-                              className="absolute w-4 h-4 cursor-nesw-resize left-0 bottom-0 transform translate-x-1/2 translate-y-1/2"
+                              className="absolute w-8 h-8 cursor-nesw-resize left-0 bottom-0 transform translate-x-1/2 translate-y-1/2 touch-none"
                               onMouseDown={(e) => handleResizeStart(e, 'sw')}
+                              onTouchStart={(e) => {
+                                logTouchEvent('touchstart', e);
+                                e.preventDefault();
+                                e.stopPropagation();
+                                const touch = e.touches[0];
+                                const mouseEvent = {
+                                  type: 'touchstart',
+                                  clientX: touch.clientX,
+                                  clientY: touch.clientY,
+                                  preventDefault: () => {},
+                                  stopPropagation: () => {}
+                                };
+                                handleResizeStart(mouseEvent, 'sw');
+                              }}
                             >
-                              <div className="absolute inset-0 bg-white rounded-full w-2 h-2 transform -translate-x-1/2 -translate-y-1/2"></div>
+                              <div className="absolute inset-0 bg-white rounded-full w-4 h-4 transform -translate-x-1/2 -translate-y-1/2"></div>
                             </div>
                             <div
-                              className="absolute w-4 h-4 cursor-nesw-resize right-0 top-0 transform translate-x-1/2 translate-y-1/2"
+                              className="absolute w-8 h-8 cursor-nesw-resize right-0 top-0 transform translate-x-1/2 translate-y-1/2 touch-none"
                               onMouseDown={(e) => handleResizeStart(e, 'ne')}
+                              onTouchStart={(e) => {
+                                logTouchEvent('touchstart', e);
+                                e.preventDefault();
+                                e.stopPropagation();
+                                const touch = e.touches[0];
+                                const mouseEvent = {
+                                  type: 'touchstart',
+                                  clientX: touch.clientX,
+                                  clientY: touch.clientY,
+                                  preventDefault: () => {},
+                                  stopPropagation: () => {}
+                                };
+                                handleResizeStart(mouseEvent, 'ne');
+                              }}
                             >
-                              <div className="absolute inset-0 bg-white rounded-full w-2 h-2 transform -translate-x-1/2 -translate-y-1/2"></div>
+                              <div className="absolute inset-0 bg-white rounded-full w-4 h-4 transform -translate-x-1/2 -translate-y-1/2"></div>
                             </div>
                             <div
-                              className="absolute w-4 h-4 cursor-nwse-resize left-0 top-0 transform translate-x-1/2 translate-y-1/2"
+                              className="absolute w-8 h-8 cursor-nwse-resize left-0 top-0 transform translate-x-1/2 translate-y-1/2 touch-none"
                               onMouseDown={(e) => handleResizeStart(e, 'nw')}
+                              onTouchStart={(e) => {
+                                logTouchEvent('touchstart', e);
+                                e.preventDefault();
+                                e.stopPropagation();
+                                const touch = e.touches[0];
+                                const mouseEvent = {
+                                  type: 'touchstart',
+                                  clientX: touch.clientX,
+                                  clientY: touch.clientY,
+                                  preventDefault: () => {},
+                                  stopPropagation: () => {}
+                                };
+                                handleResizeStart(mouseEvent, 'nw');
+                              }}
                             >
-                              <div className="absolute inset-0 bg-white rounded-full w-2 h-2 transform -translate-x-1/2 -translate-y-1/2"></div>
+                              <div className="absolute inset-0 bg-white rounded-full w-4 h-4 transform -translate-x-1/2 -translate-y-1/2"></div>
                             </div>
 
-                            {/* Action buttons */}
                             {/* Action buttons */}
                             <div className="absolute -top-6 right-0 flex gap-2">
                               <button

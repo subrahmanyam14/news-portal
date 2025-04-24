@@ -64,7 +64,7 @@ export default function ImageViewer({
   };
 
   return (
-    <div className="w-full flex flex-col justify-center items-center relative p-4">
+    <div className="w-full flex flex-col justify-center items-center relative p-0 md:p-4">
       <button
         className="absolute left-2 top-1/2 transform -translate-y-1/2 bg-gray-700 p-2 rounded-full text-white hover:bg-gray-600 disabled:opacity-50 z-10 transition-all duration-300 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:hover:bg-gray-400"
         onClick={() => {
@@ -79,7 +79,7 @@ export default function ImageViewer({
         <ChevronLeft size={24} />
       </button>
 
-      <div className="w-full flex justify-center items-center" style={{ height: '70vh' }}>
+      <div className="w-full flex justify-center items-center" style={{ height: '80vh' }}>
         {isClipping ? (
           <div className="relative" ref={clipContainerRef}>
             <img
@@ -93,7 +93,7 @@ export default function ImageViewer({
             <div className="absolute inset-0 bg-black bg-opacity-70">
               {/* Clip area (transparent window) */}
               <div
-                className="absolute cursor-move"
+                className="absolute cursor-move touch-none"
                 style={{
                   left: `${clipBox.x}px`,
                   top: `${clipBox.y}px`,
@@ -101,34 +101,102 @@ export default function ImageViewer({
                   height: `${clipBox.height}px`,
                 }}
                 onMouseDown={onMoveStart}
+                onTouchStart={(e) => {
+                  e.preventDefault();
+                  const touch = e.touches[0];
+                  const mouseEvent = {
+                    type: 'touchstart',
+                    clientX: touch.clientX,
+                    clientY: touch.clientY,
+                    preventDefault: () => {},
+                    stopPropagation: () => {}
+                  };
+                  onMoveStart(mouseEvent);
+                }}
               >
                 {/* Clear area to see the image */}
                 <div className="absolute inset-0 bg-transparent border-2 border-white rounded-md border-dashed"></div>
 
-                {/* Resize handles */}
+                {/* Resize handles - update each with improved touch handling */}
                 <div
-                  className="absolute w-4 h-4 cursor-nwse-resize right-0 bottom-0 transform translate-x-1/2 translate-y-1/2"
+                  className="absolute w-8 h-8 cursor-nwse-resize right-0 bottom-0 transform translate-x-1/2 translate-y-1/2 touch-none"
                   onMouseDown={(e) => onResizeStart(e, 'se')}
+                  onTouchStart={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const touch = e.touches[0];
+                    const mouseEvent = {
+                      type: 'touchstart',
+                      clientX: touch.clientX,
+                      clientY: touch.clientY,
+                      preventDefault: () => {},
+                      stopPropagation: () => {}
+                    };
+                    onResizeStart(mouseEvent, 'se');
+                  }}
                 >
-                  <div className="absolute inset-0 bg-white rounded-full w-2 h-2 transform -translate-x-1/2 -translate-y-1/2"></div>
+                  <div className="absolute inset-0 bg-white rounded-full w-4 h-4 transform -translate-x-1/2 -translate-y-1/2"></div>
                 </div>
+                
+                {/* Apply the same changes to all other resize handles */}
                 <div
-                  className="absolute w-4 h-4 cursor-nesw-resize left-0 bottom-0 transform translate-x-1/2 translate-y-1/2"
+                  className="absolute w-8 h-8 cursor-nesw-resize left-0 bottom-0 transform translate-x-1/2 translate-y-1/2 touch-none"
                   onMouseDown={(e) => onResizeStart(e, 'sw')}
+                  onTouchStart={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const touch = e.touches[0];
+                    const mouseEvent = {
+                      type: 'touchstart',
+                      clientX: touch.clientX,
+                      clientY: touch.clientY,
+                      preventDefault: () => {},
+                      stopPropagation: () => {}
+                    };
+                    onResizeStart(mouseEvent, 'sw');
+                  }}
                 >
-                  <div className="absolute inset-0 bg-white rounded-full w-2 h-2 transform -translate-x-1/2 -translate-y-1/2"></div>
+                  <div className="absolute inset-0 bg-white rounded-full w-4 h-4 transform -translate-x-1/2 -translate-y-1/2"></div>
                 </div>
+                
                 <div
-                  className="absolute w-4 h-4 cursor-nesw-resize right-0 top-0 transform translate-x-1/2 translate-y-1/2"
+                  className="absolute w-8 h-8 cursor-nesw-resize right-0 top-0 transform translate-x-1/2 translate-y-1/2 touch-none"
                   onMouseDown={(e) => onResizeStart(e, 'ne')}
+                  onTouchStart={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const touch = e.touches[0];
+                    const mouseEvent = {
+                      type: 'touchstart',
+                      clientX: touch.clientX,
+                      clientY: touch.clientY,
+                      preventDefault: () => {},
+                      stopPropagation: () => {}
+                    };
+                    onResizeStart(mouseEvent, 'ne');
+                  }}
                 >
-                  <div className="absolute inset-0 bg-white rounded-full w-2 h-2 transform -translate-x-1/2 -translate-y-1/2"></div>
+                  <div className="absolute inset-0 bg-white rounded-full w-4 h-4 transform -translate-x-1/2 -translate-y-1/2"></div>
                 </div>
+                
                 <div
-                  className="absolute w-4 h-4 cursor-nwse-resize left-0 top-0 transform translate-x-1/2 translate-y-1/2"
+                  className="absolute w-8 h-8 cursor-nwse-resize left-0 top-0 transform translate-x-1/2 translate-y-1/2 touch-none"
                   onMouseDown={(e) => onResizeStart(e, 'nw')}
+                  onTouchStart={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const touch = e.touches[0];
+                    const mouseEvent = {
+                      type: 'touchstart',
+                      clientX: touch.clientX,
+                      clientY: touch.clientY,
+                      preventDefault: () => {},
+                      stopPropagation: () => {}
+                    };
+                    onResizeStart(mouseEvent, 'nw');
+                  }}
                 >
-                  <div className="absolute inset-0 bg-white rounded-full w-2 h-2 transform -translate-x-1/2 -translate-y-1/2"></div>
+                  <div className="absolute inset-0 bg-white rounded-full w-4 h-4 transform -translate-x-1/2 -translate-y-1/2"></div>
                 </div>
 
                 {/* Action buttons */}
@@ -212,10 +280,7 @@ export default function ImageViewer({
               maxShadowOpacity={0.5}
               showPageCorners={true}
               disableFlipByClick={false}
-              singlePageMode={true}
-              swipeDistance={40}
             >
-              {/* Single page mode - only show one page at a time */}
               {renderPages()}
             </HTMLFlipBook>
           </div>
@@ -236,7 +301,6 @@ export default function ImageViewer({
         <ChevronRight size={24} />
       </button>
 
-      {/* Add custom CSS for the flip book */}
       <style jsx global>{`
         .newspaper-book {
           background-color: transparent !important;
@@ -271,6 +335,54 @@ export default function ImageViewer({
         .stf__block {
           box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
           background: white;
+        }
+        
+        /* Mobile specific styles */
+        @media (max-width: 768px) {
+          .newspaper-book {
+            width: 100% !important;
+            height: 100% !important;
+          }
+          
+          .page {
+            padding: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+          }
+          
+          .page-content {
+            padding: 0 !important;
+          }
+          
+          .page-content img {
+            max-width: 100%;
+            width: auto;
+            height: auto;
+            object-fit: contain;
+          }
+          
+          .flip-book-container {
+            width: 100% !important;
+            padding: 0 !important;
+          }
+          
+          /* Mobile touch optimization */
+          .page-content img {
+            touch-action: none !important;
+          }
+          
+          /* Make clip handles easier to grab on mobile */
+          .absolute.cursor-move,
+          [class*="cursor-n"],
+          [class*="cursor-s"],
+          [class*="cursor-e"],
+          [class*="cursor-w"] {
+            touch-action: none !important;
+          }
+          
+          .stf__block {
+            touch-action: pan-y !important;
+          }
         }
       `}</style>
     </div>
