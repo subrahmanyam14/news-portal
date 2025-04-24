@@ -1128,8 +1128,8 @@ export default function ImageViewer() {
                   ref={flipCardRef}
                   className={`flip-card ${isFlipping ? `flipping ${flipDirection}` : ''} ${noTransition ? 'no-transition' : ''}`}
                   style={{
-                    width: '100%',
-                    height: '100%',
+                    width: '200%',
+                    height: '200%',
                     position: 'relative'
                   }}
                 >

@@ -1,5 +1,5 @@
-import { useRef, useState, useEffect } from "react";
 import { ChevronLeft, ChevronRight, Download, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import HTMLFlipBook from "react-pageflip";
 
 export default function ImageViewer({
@@ -200,7 +200,7 @@ export default function ImageViewer({
               maxHeight={1000}
               drawShadow={true}
               flippingTime={1000}
-              usePortrait={false}
+              usePortrait={true}
               startPage={activeImage ? activeImage.id - 1 : 0}
               showCover={false}
               mobileScrollSupport={true}
@@ -212,6 +212,8 @@ export default function ImageViewer({
               maxShadowOpacity={0.5}
               showPageCorners={true}
               disableFlipByClick={false}
+              singlePageMode={true}
+              swipeDistance={40}
             >
               {/* Single page mode - only show one page at a time */}
               {renderPages()}
