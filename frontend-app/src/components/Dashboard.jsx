@@ -167,7 +167,7 @@ const Dashboard = () => {
       formData.append('isPublished', isPublished);
 
       const token = localStorage.getItem('token');
-      await axios.post(`${process.env.REACT_APP_BACKEND_URL}/newspaper/upload`, formData, {
+      await axios.post(`${process.env.REACT_APP_BACKEND_URL}/newspaper/upload-pdf`, formData, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'multipart/form-data',

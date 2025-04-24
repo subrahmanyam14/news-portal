@@ -22,6 +22,6 @@ router.get("/future", getNewspapersIncludeFuture);
 router.delete("/:id", deleteNewspaper);
 
 // Admin routes
-router.post('/upload', uploadNewspaper);
+router.post('/upload-pdf', uploadNewspaper);
 
 module.exports = router;
