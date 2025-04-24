@@ -26,6 +26,9 @@ export default function ImageViewer({
   const bookRef = useRef(null);
   const clipImageRef = useRef(null);
   const [currentPage, setCurrentPage] = useState(0);
+  const [resizing, setResizing] = useState(null); // e.g., 'nw', 'se', etc.
+const [startTouch, setStartTouch] = useState(null);
+
 
   useEffect(() => {
     // Update the current page when activeImage changes
@@ -33,6 +36,88 @@ export default function ImageViewer({
       setCurrentPage(activeImage.id - 1);
     }
   }, [activeImage]);
+
+
+  useEffect(() => {
+    const handleMove = (e) => {
+      if (!resizing || !startTouch) return;
+  
+      const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+      const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+      const deltaX = clientX - startTouch.x;
+      const deltaY = clientY - startTouch.y;
+  
+      let newBox = { ...startTouch.box };
+  
+      switch (resizing) {
+        case 'se':
+          newBox.width = startTouch.box.width + deltaX;
+          newBox.height = startTouch.box.height + deltaY;
+          break;
+        case 'sw':
+          newBox.width = startTouch.box.width - deltaX;
+          newBox.height = startTouch.box.height + deltaY;
+          newBox.x = startTouch.box.x + deltaX;
+          break;
+        case 'ne':
+          newBox.width = startTouch.box.width + deltaX;
+          newBox.height = startTouch.box.height - deltaY;
+          newBox.y = startTouch.box.y + deltaY;
+          break;
+        case 'nw':
+          newBox.width = startTouch.box.width - deltaX;
+          newBox.height = startTouch.box.height - deltaY;
+          newBox.x = startTouch.box.x + deltaX;
+          newBox.y = startTouch.box.y + deltaY;
+          break;
+      }
+  
+      // Ensure minimum size
+      newBox.width = Math.max(50, newBox.width);
+      newBox.height = Math.max(50, newBox.height);
+  
+      // Update clipBox
+      clipBox.x = newBox.x;
+      clipBox.y = newBox.y;
+      clipBox.width = newBox.width;
+      clipBox.height = newBox.height;
+  
+      // Force re-render (if you're using context or props, update accordingly)
+      setStartTouch({ ...startTouch }); // force update
+    };
+  
+    const handleEnd = () => {
+      setResizing(null);
+      setStartTouch(null);
+    };
+  
+    if (resizing) {
+      document.addEventListener('mousemove', handleMove);
+      document.addEventListener('mouseup', handleEnd);
+      document.addEventListener('touchmove', handleMove, { passive: false });
+      document.addEventListener('touchend', handleEnd);
+    }
+  
+    return () => {
+      document.removeEventListener('mousemove', handleMove);
+      document.removeEventListener('mouseup', handleEnd);
+      document.removeEventListener('touchmove', handleMove);
+      document.removeEventListener('touchend', handleEnd);
+    };
+  }, [resizing, startTouch]);
+
+  
+
+  const handleResizeStart = (e, direction) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+    const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+  
+    setStartTouch({ x: clientX, y: clientY, box: { ...clipBox } });
+    setResizing(direction);
+  };
+  
 
   // Handle manual page flipping through the book component
   const handlePageFlip = (e) => {
@@ -121,19 +206,8 @@ export default function ImageViewer({
                 <div
                   className="absolute w-8 h-8 cursor-nwse-resize right-0 bottom-0 transform translate-x-1/2 translate-y-1/2 touch-none"
                   onMouseDown={(e) => onResizeStart(e, 'se')}
-                  onTouchStart={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    const touch = e.touches[0];
-                    const mouseEvent = {
-                      type: 'touchstart',
-                      clientX: touch.clientX,
-                      clientY: touch.clientY,
-                      preventDefault: () => {},
-                      stopPropagation: () => {}
-                    };
-                    onResizeStart(mouseEvent, 'se');
-                  }}
+                  onTouchStart={(e) => handleResizeStart(e, 'se')}
+
                 >
                   <div className="absolute inset-0 bg-white rounded-full w-4 h-4 transform -translate-x-1/2 -translate-y-1/2"></div>
                 </div>
@@ -142,19 +216,8 @@ export default function ImageViewer({
                 <div
                   className="absolute w-8 h-8 cursor-nesw-resize left-0 bottom-0 transform translate-x-1/2 translate-y-1/2 touch-none"
                   onMouseDown={(e) => onResizeStart(e, 'sw')}
-                  onTouchStart={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    const touch = e.touches[0];
-                    const mouseEvent = {
-                      type: 'touchstart',
-                      clientX: touch.clientX,
-                      clientY: touch.clientY,
-                      preventDefault: () => {},
-                      stopPropagation: () => {}
-                    };
-                    onResizeStart(mouseEvent, 'sw');
-                  }}
+                  onTouchStart={(e) => handleResizeStart(e, 'se')}
+
                 >
                   <div className="absolute inset-0 bg-white rounded-full w-4 h-4 transform -translate-x-1/2 -translate-y-1/2"></div>
                 </div>
@@ -162,19 +225,8 @@ export default function ImageViewer({
                 <div
                   className="absolute w-8 h-8 cursor-nesw-resize right-0 top-0 transform translate-x-1/2 translate-y-1/2 touch-none"
                   onMouseDown={(e) => onResizeStart(e, 'ne')}
-                  onTouchStart={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    const touch = e.touches[0];
-                    const mouseEvent = {
-                      type: 'touchstart',
-                      clientX: touch.clientX,
-                      clientY: touch.clientY,
-                      preventDefault: () => {},
-                      stopPropagation: () => {}
-                    };
-                    onResizeStart(mouseEvent, 'ne');
-                  }}
+                  onTouchStart={(e) => handleResizeStart(e, 'se')}
+
                 >
                   <div className="absolute inset-0 bg-white rounded-full w-4 h-4 transform -translate-x-1/2 -translate-y-1/2"></div>
                 </div>
@@ -182,19 +234,8 @@ export default function ImageViewer({
                 <div
                   className="absolute w-8 h-8 cursor-nwse-resize left-0 top-0 transform translate-x-1/2 translate-y-1/2 touch-none"
                   onMouseDown={(e) => onResizeStart(e, 'nw')}
-                  onTouchStart={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    const touch = e.touches[0];
-                    const mouseEvent = {
-                      type: 'touchstart',
-                      clientX: touch.clientX,
-                      clientY: touch.clientY,
-                      preventDefault: () => {},
-                      stopPropagation: () => {}
-                    };
-                    onResizeStart(mouseEvent, 'nw');
-                  }}
+                  onTouchStart={(e) => handleResizeStart(e, 'se')}
+
                 >
                   <div className="absolute inset-0 bg-white rounded-full w-4 h-4 transform -translate-x-1/2 -translate-y-1/2"></div>
                 </div>
