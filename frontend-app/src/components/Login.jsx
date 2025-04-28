@@ -23,10 +23,16 @@ const Login = () => {
       
       const { token, user } = response.data;
       
-      // Use the login function from context instead of directly setting localStorage
+      // Use the login function from context which now also stores login timestamp
       login(token, user);
       
-      navigate('/dashboard');
+      // Navigate based on user role
+      if(user.role === "superadmin") {
+        navigate('/super-admin');
+      } else {
+        navigate('/dashboard');
+      }
+      
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'An error occurred during login');
     } finally {

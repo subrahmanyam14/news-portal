@@ -30,6 +30,9 @@ const customStyles = `
 `;
 
 const Dashboard = () => {
+  // User permissions state
+  const [userPermissions, setUserPermissions] = useState([]);
+  
   // Original state variables
   const [newspaper, setNewspaper] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -58,28 +61,64 @@ const Dashboard = () => {
   const [newCategory, setNewCategory] = useState('');
 
   // Tab state
-  const [activeTab, setActiveTab] = useState('newspaper');
+  const [activeTab, setActiveTab] = useState('');
   const navigate = useNavigate();
 
-  // Check if user is authenticated
+  // Load user permissions and set initial active tab
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) {
       navigate('/login');
-    } else {
-      fetchNewspaper(1, includeFuture);
-      fetchNavLinks();
-      if (activeTab === 'headlines') {
+      return;
+    }
+    
+    try {
+      // Get user data from localStorage
+      const userDataString = localStorage.getItem('user');
+      if (userDataString) {
+        const userData = JSON.parse(userDataString);
+        const permissions = userData.permissions || [];
+        setUserPermissions(permissions);
+        
+        // Set initial active tab based on permissions
+        if (permissions.includes('newspaper_management')) {
+          setActiveTab('newspaper');
+        } else if (permissions.includes('navigation_management')) {
+          setActiveTab('navigation');
+        } else if (permissions.includes('headlines_management')) {
+          setActiveTab('headlines');
+        }
+      }
+    } catch (err) {
+      console.error('Error parsing user data:', err);
+      toast.error('Could not load user permissions');
+    }
+  }, [navigate]);
+
+  // Check if user is authenticated and fetch appropriate data
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      navigate('/login');
+    } else if (activeTab) {
+      if (activeTab === 'newspaper' && userPermissions.includes('newspaper_management')) {
+        fetchNewspaper(1, includeFuture);
+        fetchAvailableDates(includeFuture);
+      } else if (activeTab === 'navigation' && userPermissions.includes('navigation_management')) {
+        fetchNavLinks();
+      } else if (activeTab === 'headlines' && userPermissions.includes('headlines_management')) {
         fetchHeadlines();
       }
     }
-  }, [navigate, activeTab]);
+  }, [navigate, activeTab, userPermissions]);
 
   // Effect to refetch data when includeFuture changes
   useEffect(() => {
-    fetchNewspaper(1, includeFuture);
-    fetchAvailableDates(includeFuture);
-  }, [includeFuture]);
+    if (activeTab === 'newspaper' && userPermissions.includes('newspaper_management')) {
+      fetchNewspaper(1, includeFuture);
+      fetchAvailableDates(includeFuture);
+    }
+  }, [includeFuture, userPermissions]);
 
   // Fetch newspaper data with pagination
   const fetchNewspaper = async (page = 1, showFuture = includeFuture) => {
@@ -654,63 +693,87 @@ const Dashboard = () => {
     );
   };
 
-  // Update the tabs section to include headlines tab
-  const renderTabs = () => (
-    <div className="flex justify-center">
-      <div className="bg-gray-100 p-1 rounded-lg flex items-center shadow-sm">
-        <button
-          onClick={() => setActiveTab('newspaper')}
-          className={`flex items-center gap-2 py-2 px-4 rounded-md transition-all duration-200 ${activeTab === 'newspaper'
-            ? 'bg-white text-[#403fbb] shadow-sm font-medium tab-active'
-            : 'text-gray-600 hover:bg-gray-200'
-            }`}
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
-            stroke={activeTab === 'newspaper' ? '#403fbb' : 'currentColor'} strokeWidth="2"
-            strokeLinecap="round" strokeLinejoin="round">
-            <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"></path>
-            <path d="M18 14h-8"></path>
-            <path d="M15 18h-5"></path>
-            <path d="M10 6h8v4h-8V6Z"></path>
-          </svg>
-          Newspaper
-        </button>
-        <button
-          onClick={() => setActiveTab('navigation')}
-          className={`flex items-center gap-2 py-2 px-4 rounded-md transition-all duration-200 ${activeTab === 'navigation'
-            ? 'bg-white text-[#403fbb] shadow-sm font-medium tab-active'
-            : 'text-gray-600 hover:bg-gray-200'
-            }`}
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
-            stroke={activeTab === 'navigation' ? '#403fbb' : 'currentColor'} strokeWidth="2"
-            strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 9h18v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9Z"></path>
-            <path d="m3 9 2.45-4.9A2 2 0 0 1 7.24 3h9.52a2 2 0 0 1 1.8 1.1L21 9"></path>
-            <path d="M12 3v6"></path>
-          </svg>
-          Navigation
-        </button>
-        <button
-          onClick={() => setActiveTab('headlines')}
-          className={`flex items-center gap-2 py-2 px-4 rounded-md transition-all duration-200 ${activeTab === 'headlines'
-            ? 'bg-white text-[#403fbb] shadow-sm font-medium tab-active'
-            : 'text-gray-600 hover:bg-gray-200'
-            }`}
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
-            stroke={activeTab === 'headlines' ? '#403fbb' : 'currentColor'} strokeWidth="2"
-            strokeLinecap="round" strokeLinejoin="round">
-            <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"></path>
-            <path d="M18 14h-8"></path>
-            <path d="M15 18h-5"></path>
-            <path d="M10 6h8v4h-8V6Z"></path>
-          </svg>
-          Headlines
-        </button>
+  // Modified tabs section to show only tabs the user has permission for
+  const renderTabs = () => {
+    // If no permissions are loaded yet or no permissions are available
+    if (userPermissions.length === 0) {
+      return (
+        <div className="flex justify-center">
+          <div className="bg-gray-100 rounded-lg p-6 text-center">
+            <p className="text-gray-600">Loading dashboard or no permissions available...</p>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex justify-center">
+        <div className="bg-gray-100 p-1 rounded-lg flex items-center shadow-sm">
+          {userPermissions.includes('newspaper_management') && (
+            <button
+              onClick={() => setActiveTab('newspaper')}
+              className={`flex items-center gap-2 py-2 px-4 rounded-md transition-all duration-200 ${
+                activeTab === 'newspaper'
+                  ? 'bg-white text-[#403fbb] shadow-sm font-medium tab-active'
+                  : 'text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                stroke={activeTab === 'newspaper' ? '#403fbb' : 'currentColor'} strokeWidth="2"
+                strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"></path>
+                <path d="M18 14h-8"></path>
+                <path d="M15 18h-5"></path>
+                <path d="M10 6h8v4h-8V6Z"></path>
+              </svg>
+              Newspaper
+            </button>
+          )}
+          
+          {userPermissions.includes('navigation_management') && (
+            <button
+              onClick={() => setActiveTab('navigation')}
+              className={`flex items-center gap-2 py-2 px-4 rounded-md transition-all duration-200 ${
+                activeTab === 'navigation'
+                  ? 'bg-white text-[#403fbb] shadow-sm font-medium tab-active'
+                  : 'text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                stroke={activeTab === 'navigation' ? '#403fbb' : 'currentColor'} strokeWidth="2"
+                strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 9h18v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9Z"></path>
+                <path d="m3 9 2.45-4.9A2 2 0 0 1 7.24 3h9.52a2 2 0 0 1 1.8 1.1L21 9"></path>
+                <path d="M12 3v6"></path>
+              </svg>
+              Navigation
+            </button>
+          )}
+          
+          {userPermissions.includes('headlines_management') && (
+            <button
+              onClick={() => setActiveTab('headlines')}
+              className={`flex items-center gap-2 py-2 px-4 rounded-md transition-all duration-200 ${
+                activeTab === 'headlines'
+                  ? 'bg-white text-[#403fbb] shadow-sm font-medium tab-active'
+                  : 'text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                stroke={activeTab === 'headlines' ? '#403fbb' : 'currentColor'} strokeWidth="2"
+                strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"></path>
+                <path d="M18 14h-8"></path>
+                <path d="M15 18h-5"></path>
+                <path d="M10 6h8v4h-8V6Z"></path>
+              </svg>
+              Headlines
+            </button>
+          )}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   // Headlines Management Section
   const renderHeadlinesSection = () => (

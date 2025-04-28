@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, X, LogIn, LayoutDashboard, LogOut, HelpCircle, Shield, Info } from 'lucide-react';
+import { Menu, X, LogIn, LayoutDashboard, LogOut, HelpCircle, Shield, Info, UserCog } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from './AuthContext';
@@ -8,6 +8,7 @@ const Navbar = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [links, setLinks] = useState([]);
   const [loadingLinks, setLoadingLinks] = useState(true);
+  const [userRole, setUserRole] = useState(null);
   const navigate = useNavigate();
   
   // Use the auth context
@@ -19,6 +20,16 @@ const Navbar = () => {
     { name: 'Security', path: '/security', icon: <Shield className="w-4 h-4 mr-1" /> },
     { name: 'Help', path: '/help', icon: <HelpCircle className="w-4 h-4 mr-1" /> }
   ];
+
+  // Check user role when login status changes
+  useEffect(() => {
+    if (isLoggedIn) {
+      const user = JSON.parse(localStorage.getItem('user'));
+      setUserRole(user?.role);
+    } else {
+      setUserRole(null);
+    }
+  }, [isLoggedIn]);
 
   // Fetch links from API
   useEffect(() => {
@@ -67,6 +78,7 @@ const Navbar = () => {
 
   const handleLogin = () => handleNavigation('/login');
   const handleDashboard = () => handleNavigation('/dashboard');
+  const handleSuperAdmin = () => handleNavigation('/super-admin');
   const handleHome = () => handleNavigation('/');
 
   const handleLogout = () => {
@@ -111,6 +123,15 @@ const Navbar = () => {
           {/* Auth Buttons */}
           {isLoggedIn ? (
             <div className="flex space-x-2">
+              {userRole === 'superadmin' && (
+                <button
+                  onClick={handleSuperAdmin}
+                  className="flex items-center px-3 py-1 bg-white text-[#403fbb] rounded hover:bg-gray-200 transition-colors"
+                >
+                  <UserCog className="w-4 h-4 mr-1" />
+                  <span>Super Admin</span>
+                </button>
+              )}
               <button
                 onClick={handleDashboard}
                 className="flex items-center px-3 py-1 bg-white text-[#403fbb] rounded hover:bg-gray-200 transition-colors"
@@ -164,6 +185,15 @@ const Navbar = () => {
           {/* Auth Buttons in Mobile */}
           {isLoggedIn ? (
             <>
+              {userRole === 'superadmin' && (
+                <button
+                  onClick={handleSuperAdmin}
+                  className="flex items-center justify-center px-3 py-2 bg-white text-[#403fbb] rounded hover:bg-gray-200 transition-colors"
+                >
+                  <UserCog className="w-5 h-5 mr-2" />
+                  <span>Super Admin</span>
+                </button>
+              )}
               <button
                 onClick={handleDashboard}
                 className="flex items-center justify-center px-3 py-2 bg-white text-[#403fbb] rounded hover:bg-gray-200 transition-colors"

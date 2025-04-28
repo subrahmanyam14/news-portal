@@ -11,7 +11,7 @@ const generateToken = (user) => {
   return jwt.sign(
     { id: user._id, email: user.email, role: user.role },
     process.env.JWT_SECRET,
-    { expiresIn: "30" }
+    { expiresIn: "1d" }
   );
 };
 
@@ -26,7 +26,7 @@ const auth = async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await UserDetails.findById(decoded.id);
 
-    if (!user) {
+    if (!user || user.role !== "superadmin") {
       return res.status(401).json({ message: "User not found" });
     }
 
@@ -73,6 +73,7 @@ const login = async (req, res) => {
         fullname: user.fullname,
         email: user.email,
         role: user.role,
+        permissions: user.permissions,
         lastLogin: user.lastLogin
       }
     });
@@ -81,6 +82,100 @@ const login = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+// Add Admin
+const addAdmin = async (req, res) => {
+  try {
+    const { fullname, email, password, role, permissions } = req.body;
+
+    if (!fullname || !email || !password || !role || !(permissions.length > 0)) {
+      return res.status(400).send({ error: "All fields are required..." });
+    }
+    
+    const isEmailExisting = await UserDetails.findOne({ email });
+    if (isEmailExisting) {
+      return res.status(400).send({ error: `${email} email already exists. Please try with another email.` });
+    }
+    
+    const saveAdmin = new UserDetails({ fullname, email, password, role, permissions });
+    await saveAdmin.save();
+    res.status(201).send({ message: `Admin details added with email: ${email}` });
+  } catch (error) {
+    console.log("Error in addAdmin: ", error);
+    res.status(500).send({ error: "Internal server error..." });
+  }
+};
+
+// Get All Admins
+const getAdmins = async (req, res) => {
+  try {
+    // Exclude regular users and superadmins if needed
+    const admins = await UserDetails.find({ 
+      role: 'admin' } 
+    ).select('-password -otp'); // Exclude sensitive fields
+    
+    res.status(200).send(admins);
+  } catch (error) {
+    console.log("Error in getAdmins: ", error);
+    res.status(500).send({ error: "Internal server error..." });
+  }
+};
+
+// Update Admin Permissions
+const updateAdminPermissions = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { permissions } = req.body;
+
+    if (!permissions || !Array.isArray(permissions) || permissions.length === 0) {
+      return res.status(400).send({ error: "Valid permissions array is required" });
+    }
+
+    const updatedAdmin = await UserDetails.findByIdAndUpdate(
+      id,
+      { $set: { permissions } },
+      { new: true }
+    ).select('-password -otp');
+
+    if (!updatedAdmin) {
+      return res.status(404).send({ error: "Admin not found" });
+    }
+
+    res.status(200).send({
+      message: "Permissions updated successfully",
+      admin: updatedAdmin
+    });
+  } catch (error) {
+    console.log("Error in updateAdminPermissions: ", error);
+    res.status(500).send({ error: "Internal server error..." });
+  }
+};
+
+// Delete Admin
+const deleteAdmin = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Prevent deletion of superadmin if needed
+    const adminToDelete = await UserDetails.findById(id);
+    if (!adminToDelete) {
+      return res.status(404).send({ error: "Admin not found" });
+    }
+
+    if (adminToDelete.role === 'superadmin') {
+      return res.status(403).send({ error: "Cannot delete superadmin" });
+    }
+
+    await User.findByIdAndDelete(id);
+    res.status(200).send({ message: "Admin deleted successfully" });
+  } catch (error) {
+    console.log("Error in deleteAdmin: ", error);
+    res.status(500).send({ error: "Internal server error..." });
+  }
+};
+
+
+
 
 // Update Password Controller
 const updatePassword = async (req, res) => {
@@ -170,13 +265,14 @@ const resetPassword = async (req, res) => {
 // Create Default Admin (Run once at startup)
 const createDefaultAdmin = async () => {
   try {
-    const adminExists = await UserDetails.findOne({ role: "admin" });
+    const adminExists = await UserDetails.findOne({ role: "superadmin" });
     if (!adminExists) {
       const admin = new UserDetails({
         fullname: "Admin User",
-        email: process.env.ADMIN_EMAIL || "admin@example.com",
+        email: process.env.ADMIN_EMAIL || "admin@eportal.com",
         password: process.env.ADMIN_PASSWORD || "admin123",
-        role: "admin"
+        role: "superadmin",
+        permissions: ["newspaper_management", "navigation_management", "headlines_management"]
       });
 
       await admin.save();
@@ -193,5 +289,9 @@ module.exports = {
   updatePassword,
   forgotPassword,
   resetPassword,
-  createDefaultAdmin
+  createDefaultAdmin,
+  addAdmin,
+  getAdmins,
+  updateAdminPermissions,
+  deleteAdmin
 };

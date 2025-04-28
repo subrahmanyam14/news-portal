@@ -18,8 +18,12 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ["admin", "user"],
+      enum: ["superadmin", "admin", "user"],
       default: "user",
+    },
+    permissions: {
+      type: [String],
+      enum: ["newspaper_management", "navigation_management", "headlines_management"]
     },
     otp: {
         type: String,
