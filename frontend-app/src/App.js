@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import Navbar from './components/Navbar';
-import Footer from './components/Footer';
-import NewspaperViewer from './components/newspaper-viewer/NewspaperViewer';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import Dashboard from './components/Dashboard';
-import Login from './components/Login';
+import { Navigate, Route, BrowserRouter as Router, Routes } from 'react-router-dom';
 import { AuthProvider } from './components/AuthContext';
+import Dashboard from './components/Dashboard';
+import Footer from './components/Footer';
+import Login from './components/Login';
+import Navbar from './components/Navbar';
+import NewspaperViewer from './components/newspaper-viewer/NewspaperViewer';
+import SuperAdminDashboard from './components/SuperAdminDashboard';
 
 const App = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -14,6 +15,13 @@ const App = () => {
   const ProtectedRoute = ({ children }) => {
     const isAuthenticated = localStorage.getItem('token') !== null;
     return isAuthenticated ? children : <Navigate to="/login" />;
+  };
+
+  // Super Admin route component
+  const SuperAdminRoute = ({ children }) => {
+    const isAuthenticated = localStorage.getItem('token') !== null;
+    const isSuperAdmin = localStorage.getItem('isSuperAdmin') === 'true';
+    return isAuthenticated && isSuperAdmin ? children : <Navigate to="/login" />;
   };
 
   const handleDateChange = (date) => {
@@ -37,6 +45,14 @@ const App = () => {
                 <ProtectedRoute>
                   <Dashboard />
                 </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/super-admin"
+              element={
+                
+                  <SuperAdminDashboard />
+                
               }
             />
             <Route path="*" element={<Navigate to="/login" />} />
