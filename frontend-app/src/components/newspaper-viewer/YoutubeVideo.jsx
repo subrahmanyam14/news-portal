@@ -70,7 +70,7 @@ export default function YoutubeVideo({ link }) {
 	};
 
 	return (
-		<div className="flex flex-col max-w-full items-center justify-center mx-6 md:max-w-4xl my-6">
+		<div className="flex flex-col max-w-full items-center justify-center  md:max-w-4xl">
 			<div
 				className={`w-full relative rounded-lg shadow-2xl transition-all duration-700 transform ${isLoaded ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
 					}`}
