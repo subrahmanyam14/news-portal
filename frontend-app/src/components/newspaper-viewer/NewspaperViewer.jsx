@@ -347,6 +347,7 @@ export default function NewspaperViewer() {
 		}
 	};
 
+	// ----- MOUSE EVENT HANDLERS -----
 	const handleResizeStart = (e, direction) => {
 		e.preventDefault();
 		e.stopPropagation();
@@ -366,8 +367,14 @@ export default function NewspaperViewer() {
 		if (!resizingClipBox && !movingClipBox) return;
 		e.preventDefault();
 
-		const dx = e.clientX - clipBoxDragStart.x;
-		const dy = e.clientY - clipBoxDragStart.y;
+		// Get the position from mouse or touch event
+		const clientX = e.clientX || (e.touches && e.touches[0] ? e.touches[0].clientX : null);
+		const clientY = e.clientY || (e.touches && e.touches[0] ? e.touches[0].clientY : null);
+		
+		if (clientX === null || clientY === null) return;
+
+		const dx = clientX - clipBoxDragStart.x;
+		const dy = clientY - clipBoxDragStart.y;
 
 		if (movingClipBox) {
 			setClipBox(prev => ({
@@ -430,11 +437,57 @@ export default function NewspaperViewer() {
 			});
 		}
 
-		setClipBoxDragStart({ x: e.clientX, y: e.clientY });
+		// Update the starting position for the next movement
+		setClipBoxDragStart({ 
+			x: clientX, 
+			y: clientY 
+		});
 	};
 
 	const handleClipBoxRelease = () => {
 		setResizingClipBox(false);
+		setMovingClipBox(false);
+	};
+
+	// ----- TOUCH EVENT HANDLERS -----
+	const handleTouchMoveStart = (e) => {
+		e.preventDefault();
+		e.stopPropagation();
+		if (e.touches && e.touches[0]) {
+			setMovingClipBox(true);
+			setClipBoxDragStart({ 
+				x: e.touches[0].clientX, 
+				y: e.touches[0].clientY 
+			});
+		}
+	};
+
+	const handleTouchMove = (e) => {
+		if (!movingClipBox) return;
+		e.preventDefault();
+		
+		if (e.touches && e.touches[0]) {
+			const touchX = e.touches[0].clientX;
+			const touchY = e.touches[0].clientY;
+			
+			const dx = touchX - clipBoxDragStart.x;
+			const dy = touchY - clipBoxDragStart.y;
+			
+			// Only moving, not resizing on touch
+			setClipBox(prev => ({
+				...prev,
+				x: Math.max(0, prev.x + dx),
+				y: Math.max(0, prev.y + dy)
+			}));
+			
+			setClipBoxDragStart({ 
+				x: touchX, 
+				y: touchY 
+			});
+		}
+	};
+
+	const handleTouchEnd = () => {
 		setMovingClipBox(false);
 	};
 
@@ -559,14 +612,25 @@ export default function NewspaperViewer() {
 	const shareToFacebook = () => handleClippedImage('facebook');
 	const shareToWhatsApp = () => handleClippedImage('whatsapp');
 
+	// Set up event listeners for both mouse and touch events
 	useEffect(() => {
 		if (isClipping) {
+			// Mouse events
 			window.addEventListener('mousemove', handleClipBoxMove);
 			window.addEventListener('mouseup', handleClipBoxRelease);
+			
+			// Touch events
+			window.addEventListener('touchmove', handleTouchMove, { passive: false });
+			window.addEventListener('touchend', handleTouchEnd);
 
 			return () => {
+				// Remove mouse events
 				window.removeEventListener('mousemove', handleClipBoxMove);
 				window.removeEventListener('mouseup', handleClipBoxRelease);
+				
+				// Remove touch events
+				window.removeEventListener('touchmove', handleTouchMove);
+				window.removeEventListener('touchend', handleTouchEnd);
 			};
 		}
 	}, [isClipping, resizingClipBox, movingClipBox, clipBoxDragStart]);
@@ -639,6 +703,7 @@ export default function NewspaperViewer() {
 							onZoomClick={() => setIsZoomed(true)}
 							clipBox={clipBox}
 							onMoveStart={handleMoveStart}
+							onTouchMoveStart={handleTouchMoveStart}
 							onResizeStart={handleResizeStart}
 							onDownloadClippedImage={downloadClippedImage}
 							onShareToFacebook={shareToFacebook}
@@ -683,6 +748,7 @@ export default function NewspaperViewer() {
 							onZoomClick={() => setIsZoomed(true)}
 							clipBox={clipBox}
 							onMoveStart={handleMoveStart}
+							onTouchMoveStart={handleTouchMoveStart}
 							onResizeStart={handleResizeStart}
 							onDownloadClippedImage={downloadClippedImage}
 							onShareToFacebook={shareToFacebook}
