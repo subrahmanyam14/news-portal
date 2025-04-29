@@ -32,8 +32,16 @@ export default function ImageViewer({
   useEffect(() => {
     if (activeImage) {
       setCurrentPage(activeImage.id - 1);
+
+      // Sync the book's page with activeImage
+      if (bookRef.current && !isFlipping) {
+        const bookCurrentPage = bookRef.current.pageFlip().getCurrentPageIndex();
+        if (bookCurrentPage !== activeImage.id - 1) {
+          bookRef.current.pageFlip().turnToPage(activeImage.id - 1);
+        }
+      }
     }
-  }, [activeImage]);
+  }, [activeImage, isFlipping]);
 
   useEffect(() => {
     const handleMove = (e) => {
@@ -109,7 +117,7 @@ export default function ImageViewer({
   const handleResizeStart = (e, direction) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     let clientX, clientY;
     if (e.touches) {
       clientX = e.touches[0].clientX;
@@ -192,8 +200,8 @@ export default function ImageViewer({
                     type: 'touchstart',
                     clientX: touch.clientX,
                     clientY: touch.clientY,
-                    preventDefault: () => {},
-                    stopPropagation: () => {}
+                    preventDefault: () => { },
+                    stopPropagation: () => { }
                   };
                   onMoveStart(mouseEvent);
                 }}
@@ -208,7 +216,7 @@ export default function ImageViewer({
                 >
                   <div className="absolute inset-0 bg-white rounded-full w-4 h-4 transform -translate-x-1/2 -translate-y-1/2"></div>
                 </div>
-                
+
                 <div
                   className="absolute w-8 h-8 cursor-nesw-resize left-0 bottom-0 transform translate-x-1/2 translate-y-1/2 touch-none"
                   onMouseDown={(e) => handleResizeStart(e, 'sw')}
@@ -216,7 +224,7 @@ export default function ImageViewer({
                 >
                   <div className="absolute inset-0 bg-white rounded-full w-4 h-4 transform -translate-x-1/2 -translate-y-1/2"></div>
                 </div>
-                
+
                 <div
                   className="absolute w-8 h-8 cursor-nesw-resize right-0 top-0 transform translate-x-1/2 translate-y-1/2 touch-none"
                   onMouseDown={(e) => handleResizeStart(e, 'ne')}
@@ -224,7 +232,7 @@ export default function ImageViewer({
                 >
                   <div className="absolute inset-0 bg-white rounded-full w-4 h-4 transform -translate-x-1/2 -translate-y-1/2"></div>
                 </div>
-                
+
                 <div
                   className="absolute w-8 h-8 cursor-nwse-resize left-0 top-0 transform translate-x-1/2 translate-y-1/2 touch-none"
                   onMouseDown={(e) => handleResizeStart(e, 'nw')}
@@ -308,6 +316,7 @@ export default function ImageViewer({
               autoSize={true}
               maxShadowOpacity={0.5}
               showPageCorners={true}
+              disableTouch={true}
               disableFlipByClick={false}
             >
               {renderPages()}
