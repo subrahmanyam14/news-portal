@@ -572,7 +572,7 @@ export default function NewspaperViewer() {
 	}, [isClipping, resizingClipBox, movingClipBox, clipBoxDragStart]);
 
 	return (
-		<div className="flex flex-col mt-16">
+		<div className="flex flex-col mt-4">
 			{/* Headlines Marquee */}
 			<HeadlinesMarquee headlines={headlines} loading={headlinesLoading} />
 
