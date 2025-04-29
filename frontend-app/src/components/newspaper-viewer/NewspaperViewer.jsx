@@ -785,3 +785,4 @@ export default function NewspaperViewer() {
 		</div>
 	);
 }
+
