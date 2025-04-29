@@ -10,6 +10,7 @@ import ImageViewer from "./ImageViewer";
 import Pagination from "./Pagination";
 import ThumbnailStrip from "./ThumbnailStrip";
 import ZoomModal from "./ZoomModal";
+import YoutubeVideo from "./YoutubeVideo";
 
 export default function NewspaperViewer() {
 	const [images, setImages] = useState([]);
@@ -33,6 +34,7 @@ export default function NewspaperViewer() {
 	const [headlinesLoading, setHeadlinesLoading] = useState(false);
 	const [availableDates, setAvailableDates] = useState([]);
 	const clipContainerRef = useRef(null);
+	const [youtubeLink, setYoutubeLink] = useState(null);
 
 	// Helper function to format date as YYYY-MM-DD
 	const formatDate = (date) => {
@@ -98,7 +100,7 @@ export default function NewspaperViewer() {
 					src,
 					date: selectedDate
 				}));
-
+				setYoutubeLink(response.data.data.youtubeLink || null);				
 				setImages(links);
 				setActiveImage(links[0] || null);
 			} catch (err) {
@@ -576,6 +578,7 @@ export default function NewspaperViewer() {
 							onPageChange={goToPage}
 							isClipping={isClipping}
 						/>
+						<YoutubeVideo link={youtubeLink}/>
 					</>
 				)}
 			</div>

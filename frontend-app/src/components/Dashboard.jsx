@@ -32,7 +32,7 @@ const customStyles = `
 const Dashboard = () => {
   // User permissions state
   const [userPermissions, setUserPermissions] = useState([]);
-  
+
   // Original state variables
   const [newspaper, setNewspaper] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -72,7 +72,7 @@ const Dashboard = () => {
       navigate('/login');
       return;
     }
-    
+
     try {
       // Get user data from localStorage
       const userDataString = localStorage.getItem('user');
@@ -80,7 +80,7 @@ const Dashboard = () => {
         const userData = JSON.parse(userDataString);
         const permissions = userData.permissions || [];
         setUserPermissions(permissions);
-        
+
         // Set initial active tab based on permissions
         if (permissions.includes('newspaper_management')) {
           setActiveTab('newspaper');
@@ -458,7 +458,7 @@ const Dashboard = () => {
           Authorization: `Bearer ${token}`,
         },
       });
-      
+
       setHeadlines(response.data || []);
     } catch (err) {
       toast.error(err.response?.data?.message || err.message || 'Failed to fetch headlines');
@@ -713,11 +713,10 @@ const Dashboard = () => {
           {userPermissions.includes('newspaper_management') && (
             <button
               onClick={() => setActiveTab('newspaper')}
-              className={`flex items-center gap-2 py-2 px-4 rounded-md transition-all duration-200 ${
-                activeTab === 'newspaper'
-                  ? 'bg-white text-[#403fbb] shadow-sm font-medium tab-active'
-                  : 'text-gray-600 hover:bg-gray-200'
-              }`}
+              className={`flex items-center gap-2 py-2 px-4 rounded-md transition-all duration-200 ${activeTab === 'newspaper'
+                ? 'bg-white text-[#403fbb] shadow-sm font-medium tab-active'
+                : 'text-gray-600 hover:bg-gray-200'
+                }`}
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
                 stroke={activeTab === 'newspaper' ? '#403fbb' : 'currentColor'} strokeWidth="2"
@@ -730,15 +729,14 @@ const Dashboard = () => {
               Newspaper
             </button>
           )}
-          
+
           {userPermissions.includes('navigation_management') && (
             <button
               onClick={() => setActiveTab('navigation')}
-              className={`flex items-center gap-2 py-2 px-4 rounded-md transition-all duration-200 ${
-                activeTab === 'navigation'
-                  ? 'bg-white text-[#403fbb] shadow-sm font-medium tab-active'
-                  : 'text-gray-600 hover:bg-gray-200'
-              }`}
+              className={`flex items-center gap-2 py-2 px-4 rounded-md transition-all duration-200 ${activeTab === 'navigation'
+                ? 'bg-white text-[#403fbb] shadow-sm font-medium tab-active'
+                : 'text-gray-600 hover:bg-gray-200'
+                }`}
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
                 stroke={activeTab === 'navigation' ? '#403fbb' : 'currentColor'} strokeWidth="2"
@@ -750,15 +748,14 @@ const Dashboard = () => {
               Navigation
             </button>
           )}
-          
+
           {userPermissions.includes('headlines_management') && (
             <button
               onClick={() => setActiveTab('headlines')}
-              className={`flex items-center gap-2 py-2 px-4 rounded-md transition-all duration-200 ${
-                activeTab === 'headlines'
-                  ? 'bg-white text-[#403fbb] shadow-sm font-medium tab-active'
-                  : 'text-gray-600 hover:bg-gray-200'
-              }`}
+              className={`flex items-center gap-2 py-2 px-4 rounded-md transition-all duration-200 ${activeTab === 'headlines'
+                ? 'bg-white text-[#403fbb] shadow-sm font-medium tab-active'
+                : 'text-gray-600 hover:bg-gray-200'
+                }`}
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
                 stroke={activeTab === 'headlines' ? '#403fbb' : 'currentColor'} strokeWidth="2"
@@ -1019,9 +1016,10 @@ const Dashboard = () => {
               placeholder="https://www.youtube.com/watch?v=..."
               className="w-full border border-gray-300 bg-white text-gray-800 rounded p-2 focus:border-[#403fbb] focus:outline-none"
             />
-            {youtubeLink && !youtubeLink.includes('youtube.com') && (
-              <p className="text-sm text-red-500 mt-1">Please enter a valid YouTube URL</p>
-            )}
+            {youtubeLink &&
+              !(youtubeLink.includes('youtube.com') || youtubeLink.includes('youtu.be')) && (
+                <p className="text-sm text-red-500 mt-1">Please enter a valid YouTube URL</p>
+              )}
           </div>
 
           {/* Publication Date Selection - No maxDate restriction */}
@@ -1067,8 +1065,8 @@ const Dashboard = () => {
           <div className="pt-2">
             <button
               onClick={handleUpload}
-              disabled={!selectedFile || uploadLoading || (youtubeLink && !youtubeLink.includes('youtube.com'))}
-              className={`px-4 py-2 rounded focus:outline-none focus:ring-2 focus:ring-[#403fbb] transition-colors ${!selectedFile || uploadLoading || (youtubeLink && !youtubeLink.includes('youtube.com'))
+              disabled={!selectedFile || uploadLoading || (youtubeLink && !(youtubeLink.includes('youtube.com') || youtubeLink.includes('youtu.be')))}
+              className={`px-4 py-2 rounded focus:outline-none focus:ring-2 focus:ring-[#403fbb] transition-colors ${!selectedFile || uploadLoading || (youtubeLink && !(youtubeLink.includes('youtube.com') || youtubeLink.includes('youtu.be')))
                 ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 : 'bg-[#403fbb] text-white hover:bg-[#5756c5]'
                 }`}
@@ -1193,9 +1191,9 @@ const Dashboard = () => {
               {newspaper.youtubeLink && (
                 <div className="mb-4">
                   <p className="text-sm text-gray-600">YouTube Link</p>
-                  <a 
-                    href={newspaper.youtubeLink} 
-                    target="_blank" 
+                  <a
+                    href={newspaper.youtubeLink}
+                    target="_blank"
                     rel="noopener noreferrer"
                     className="font-medium text-blue-600 hover:underline"
                   >
