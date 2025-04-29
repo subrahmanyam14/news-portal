@@ -3,7 +3,6 @@ import { useState, useEffect, useRef } from 'react';
 export default function YoutubeVideo({ link }) {
 	const [isLoaded, setIsLoaded] = useState(false);
 	const [isPlaying, setIsPlaying] = useState(false);
-	const [showControls, setShowControls] = useState(false);
 	const iframeRef = useRef(null);
 	const playerRef = useRef(null);
 
@@ -33,7 +32,7 @@ export default function YoutubeVideo({ link }) {
 				videoId,
 				playerVars: {
 					autoplay: 0,
-					controls: showControls ? 1 : 0,
+					controls: 1,
 					rel: 0,
 					showinfo: 0,
 					modestbranding: 1,
@@ -54,7 +53,7 @@ export default function YoutubeVideo({ link }) {
 			}
 			window.onYouTubeIframeAPIReady = null;
 		};
-	}, [videoId, showControls]);
+	}, [videoId]);
 
 	if (!link || !videoId) return null;
 
@@ -70,36 +69,8 @@ export default function YoutubeVideo({ link }) {
 		}
 	};
 
-	// Handle showing/hiding controls without reloading video
-	const handleControlsToggle = () => {
-		if (playerRef.current) {
-			// We need to reload the player with new controls setting
-			// But we'll save the current time first
-			const currentTime = playerRef.current.getCurrentTime();
-			const wasPlaying = isPlaying;
-
-			playerRef.current.destroy();
-			const newShowControls = !showControls;
-			setShowControls(newShowControls);
-
-			// Recreate player with new controls setting
-			playerRef.current = new window.YT.Player(iframeRef.current, {
-				videoId: videoId,
-				playerVars: {
-					start: Math.floor(currentTime),
-					autoplay: wasPlaying ? 1 : 0,
-					controls: newShowControls ? 1 : 0,
-					rel: 0,
-					showinfo: 0,
-					modestbranding: 1,
-					enablejsapi: 1
-				}
-			});
-		}
-	};
-
 	return (
-		<div className="flex flex-col items-center justify-center mx-6 md:mx-auto md:max-w-4xl my-6">
+		<div className="flex flex-col max-w-full items-center justify-center mx-6 md:max-w-4xl my-6">
 			<div
 				className={`w-full relative rounded-lg shadow-2xl transition-all duration-700 transform ${isLoaded ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
 					}`}
@@ -119,12 +90,6 @@ export default function YoutubeVideo({ link }) {
 					onClick={handlePlayToggle}
 				>
 					{isPlaying ? 'Pause' : 'Play'}
-				</button>
-				<button
-					className="px-4 py-2 rounded-md bg-gradient-to-r from-gray-700 to-gray-900 text-white font-medium transform transition hover:scale-105 hover:shadow-lg"
-					onClick={handleControlsToggle}
-				>
-					{showControls ? 'Hide Controls' : 'Show Controls'}
 				</button>
 			</div>
 		</div>

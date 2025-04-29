@@ -210,7 +210,7 @@ const Dashboard = () => {
     try {
       const formData = new FormData();
       formData.append('pdf', selectedFile);
-
+      formData.append('youtubeLink', youtubeLink);
       // Add publication date in ISO format
       const formattedDate = publicationDate.toISOString();
       formData.append('publicationDate', formattedDate);
@@ -232,6 +232,7 @@ const Dashboard = () => {
 
       // Reset form after successful upload
       setSelectedFile(null);
+      setYoutubeLink(null);
       setPublicationDate(new Date());
       setIsPublished(true);
 
