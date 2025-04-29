@@ -182,7 +182,7 @@ const uploadNewspaper = async (req, res) => {
       originalFilename: req.file.originalname,
       publicationDate: publicationDate,
       isPublished: isPublished,
-      youtubeLink: (req.youtubeLink !== (undefined || null)? req.youtubeLink: null)
+      youtubeLink: (req.body.youtubeLink !== (undefined || null)? req.body.youtubeLink: null)
     });
 
     await newspaper.save();
