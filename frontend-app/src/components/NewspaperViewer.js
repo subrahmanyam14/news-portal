@@ -865,7 +865,7 @@ export default function ImageViewer() {
       formData.append('image', blob, `newspaper-clip-${selectedDate}.jpg`);
 
       // Make the POST request to your upload endpoint
-      const response = await fetch('http://localhost:5002/newspaper/upload', {
+      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/newspaper/upload`, {
         method: 'POST',
         body: formData
       });
