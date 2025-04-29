@@ -21,6 +21,10 @@ const NewspaperSchema = new mongoose.Schema(
     isPublished: {
       type: Boolean,
       default: false
+    },
+    youtubeLink: {
+      type: String,
+      default: null,
     }
   },
   { 

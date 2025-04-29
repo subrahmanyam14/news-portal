@@ -50,6 +50,7 @@ const Dashboard = () => {
   const [isPublished, setIsPublished] = useState(true);
   const [selectedFile, setSelectedFile] = useState(null);
   const [includeFuture, setIncludeFuture] = useState(false);
+  const [youtubeLink, setYoutubeLink] = useState(null);
 
   // Headlines management state
   const [headlines, setHeadlines] = useState([]);
@@ -1008,6 +1009,21 @@ const Dashboard = () => {
             </span>
           </div>
 
+          {/* YouTube Link Input */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">YouTube Link (Optional)</label>
+            <input
+              type="text"
+              value={youtubeLink}
+              onChange={(e) => setYoutubeLink(e.target.value)}
+              placeholder="https://www.youtube.com/watch?v=..."
+              className="w-full border border-gray-300 bg-white text-gray-800 rounded p-2 focus:border-[#403fbb] focus:outline-none"
+            />
+            {youtubeLink && !youtubeLink.includes('youtube.com') && (
+              <p className="text-sm text-red-500 mt-1">Please enter a valid YouTube URL</p>
+            )}
+          </div>
+
           {/* Publication Date Selection - No maxDate restriction */}
           <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
             <div>
@@ -1051,8 +1067,8 @@ const Dashboard = () => {
           <div className="pt-2">
             <button
               onClick={handleUpload}
-              disabled={!selectedFile || uploadLoading}
-              className={`px-4 py-2 rounded focus:outline-none focus:ring-2 focus:ring-[#403fbb] transition-colors ${!selectedFile || uploadLoading
+              disabled={!selectedFile || uploadLoading || (youtubeLink && !youtubeLink.includes('youtube.com'))}
+              className={`px-4 py-2 rounded focus:outline-none focus:ring-2 focus:ring-[#403fbb] transition-colors ${!selectedFile || uploadLoading || (youtubeLink && !youtubeLink.includes('youtube.com'))
                 ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 : 'bg-[#403fbb] text-white hover:bg-[#5756c5]'
                 }`}
@@ -1172,6 +1188,21 @@ const Dashboard = () => {
                   <p className="font-medium text-gray-800">{newspaper.totalpages}</p>
                 </div>
               </div>
+
+              {/* Display YouTube link if available */}
+              {newspaper.youtubeLink && (
+                <div className="mb-4">
+                  <p className="text-sm text-gray-600">YouTube Link</p>
+                  <a 
+                    href={newspaper.youtubeLink} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="font-medium text-blue-600 hover:underline"
+                  >
+                    {newspaper.youtubeLink}
+                  </a>
+                </div>
+              )}
 
               <button
                 onClick={() => handleDelete(newspaper._id)}

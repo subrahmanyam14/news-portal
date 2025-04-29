@@ -165,7 +165,8 @@ const uploadNewspaper = async (req, res) => {
 
     console.log('Converting PDF to images...');
     const imagePaths = await convertPDFToImages(pdfPath, PAGES_DIR);
-    console.log(`Generated ${imagePaths.length} ultra-HD images from PDF`);
+    console.log(`Generate
+      d ${imagePaths.length} ultra-HD images from PDF`);
 
     console.log('Optimizing images...');
     const optimizedImagePaths = await optimizeImages(imagePaths);
@@ -180,7 +181,8 @@ const uploadNewspaper = async (req, res) => {
       totalpages: imageUrls.length,
       originalFilename: req.file.originalname,
       publicationDate: publicationDate,
-      isPublished: isPublished
+      isPublished: isPublished,
+      youtubeLink: (req.youtubeLink !== (undefined || null)? req.youtubeLink: null)
     });
 
     await newspaper.save();
