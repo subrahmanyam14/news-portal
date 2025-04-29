@@ -26,29 +26,34 @@ export default function ImageViewer({
   const bookRef = useRef(null);
   const clipImageRef = useRef(null);
   const [currentPage, setCurrentPage] = useState(0);
-  const [resizing, setResizing] = useState(null); // e.g., 'nw', 'se', etc.
-const [startTouch, setStartTouch] = useState(null);
-
+  const [resizing, setResizing] = useState(null);
+  const [startTouch, setStartTouch] = useState(null);
 
   useEffect(() => {
-    // Update the current page when activeImage changes
     if (activeImage) {
       setCurrentPage(activeImage.id - 1);
     }
   }, [activeImage]);
 
-
   useEffect(() => {
     const handleMove = (e) => {
       if (!resizing || !startTouch) return;
-  
-      const clientX = e.clientX || (e.touches && e.touches[0].clientX);
-      const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+
+      let clientX, clientY;
+      if (e.touches) {
+        e.preventDefault();
+        clientX = e.touches[0].clientX;
+        clientY = e.touches[0].clientY;
+      } else {
+        clientX = e.clientX;
+        clientY = e.clientY;
+      }
+
       const deltaX = clientX - startTouch.x;
       const deltaY = clientY - startTouch.y;
-  
+
       let newBox = { ...startTouch.box };
-  
+
       switch (resizing) {
         case 'se':
           newBox.width = startTouch.box.width + deltaX;
@@ -71,33 +76,28 @@ const [startTouch, setStartTouch] = useState(null);
           newBox.y = startTouch.box.y + deltaY;
           break;
       }
-  
-      // Ensure minimum size
+
       newBox.width = Math.max(50, newBox.width);
       newBox.height = Math.max(50, newBox.height);
-  
-      // Update clipBox
+
       clipBox.x = newBox.x;
       clipBox.y = newBox.y;
       clipBox.width = newBox.width;
       clipBox.height = newBox.height;
-  
-      // Force re-render (if you're using context or props, update accordingly)
-      setStartTouch({ ...startTouch }); // force update
     };
-  
+
     const handleEnd = () => {
       setResizing(null);
       setStartTouch(null);
     };
-  
+
     if (resizing) {
       document.addEventListener('mousemove', handleMove);
       document.addEventListener('mouseup', handleEnd);
       document.addEventListener('touchmove', handleMove, { passive: false });
       document.addEventListener('touchend', handleEnd);
     }
-  
+
     return () => {
       document.removeEventListener('mousemove', handleMove);
       document.removeEventListener('mouseup', handleEnd);
@@ -106,24 +106,26 @@ const [startTouch, setStartTouch] = useState(null);
     };
   }, [resizing, startTouch]);
 
-  
-
   const handleResizeStart = (e, direction) => {
     e.preventDefault();
     e.stopPropagation();
-    const clientX = e.clientX || (e.touches && e.touches[0].clientX);
-    const clientY = e.clientY || (e.touches && e.touches[0].clientY);
-  
+    
+    let clientX, clientY;
+    if (e.touches) {
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+    } else {
+      clientX = e.clientX;
+      clientY = e.clientY;
+    }
+
     setStartTouch({ x: clientX, y: clientY, box: { ...clipBox } });
     setResizing(direction);
   };
-  
 
-  // Handle manual page flipping through the book component
   const handlePageFlip = (e) => {
     const newPage = e.data;
     if (images[newPage]) {
-      // Let the parent component know about the page change
       if (newPage > currentPage) {
         onNextImage();
       } else if (newPage < currentPage) {
@@ -132,7 +134,6 @@ const [startTouch, setStartTouch] = useState(null);
     }
   };
 
-  // Prepare pages for the flip book
   const renderPages = () => {
     return images.map((image, index) => (
       <div key={index} className="page">
@@ -174,9 +175,7 @@ const [startTouch, setStartTouch] = useState(null);
               ref={clipImageRef}
             />
 
-            {/* Overlay with semi-transparent background */}
             <div className="absolute inset-0 bg-black bg-opacity-70">
-              {/* Clip area (transparent window) */}
               <div
                 className="absolute cursor-move touch-none"
                 style={{
@@ -199,48 +198,41 @@ const [startTouch, setStartTouch] = useState(null);
                   onMoveStart(mouseEvent);
                 }}
               >
-                {/* Clear area to see the image */}
                 <div className="absolute inset-0 bg-transparent border-2 border-white rounded-md border-dashed"></div>
 
-                {/* Resize handles - update each with improved touch handling */}
+                {/* Resize handles */}
                 <div
                   className="absolute w-8 h-8 cursor-nwse-resize right-0 bottom-0 transform translate-x-1/2 translate-y-1/2 touch-none"
-                  onMouseDown={(e) => onResizeStart(e, 'se')}
+                  onMouseDown={(e) => handleResizeStart(e, 'se')}
                   onTouchStart={(e) => handleResizeStart(e, 'se')}
-
                 >
                   <div className="absolute inset-0 bg-white rounded-full w-4 h-4 transform -translate-x-1/2 -translate-y-1/2"></div>
                 </div>
                 
-                {/* Apply the same changes to all other resize handles */}
                 <div
                   className="absolute w-8 h-8 cursor-nesw-resize left-0 bottom-0 transform translate-x-1/2 translate-y-1/2 touch-none"
-                  onMouseDown={(e) => onResizeStart(e, 'sw')}
-                  onTouchStart={(e) => handleResizeStart(e, 'se')}
-
+                  onMouseDown={(e) => handleResizeStart(e, 'sw')}
+                  onTouchStart={(e) => handleResizeStart(e, 'sw')}
                 >
                   <div className="absolute inset-0 bg-white rounded-full w-4 h-4 transform -translate-x-1/2 -translate-y-1/2"></div>
                 </div>
                 
                 <div
                   className="absolute w-8 h-8 cursor-nesw-resize right-0 top-0 transform translate-x-1/2 translate-y-1/2 touch-none"
-                  onMouseDown={(e) => onResizeStart(e, 'ne')}
-                  onTouchStart={(e) => handleResizeStart(e, 'se')}
-
+                  onMouseDown={(e) => handleResizeStart(e, 'ne')}
+                  onTouchStart={(e) => handleResizeStart(e, 'ne')}
                 >
                   <div className="absolute inset-0 bg-white rounded-full w-4 h-4 transform -translate-x-1/2 -translate-y-1/2"></div>
                 </div>
                 
                 <div
                   className="absolute w-8 h-8 cursor-nwse-resize left-0 top-0 transform translate-x-1/2 translate-y-1/2 touch-none"
-                  onMouseDown={(e) => onResizeStart(e, 'nw')}
-                  onTouchStart={(e) => handleResizeStart(e, 'se')}
-
+                  onMouseDown={(e) => handleResizeStart(e, 'nw')}
+                  onTouchStart={(e) => handleResizeStart(e, 'nw')}
                 >
                   <div className="absolute inset-0 bg-white rounded-full w-4 h-4 transform -translate-x-1/2 -translate-y-1/2"></div>
                 </div>
 
-                {/* Action buttons */}
                 <div className="absolute -top-6 right-0 flex gap-2">
                   <button
                     className="bg-green-500 text-white px-2 py-1 rounded-md flex items-center gap-2 hover:bg-green-600 transition-colors shadow-md"
@@ -255,7 +247,6 @@ const [startTouch, setStartTouch] = useState(null);
                     )}
                   </button>
 
-                  {/* Facebook share button */}
                   <button
                     className="bg-blue-600 text-white px-2 py-1 rounded-md flex items-center gap-2 hover:bg-blue-700 transition-colors shadow-md"
                     onClick={onShareToFacebook}
@@ -267,7 +258,6 @@ const [startTouch, setStartTouch] = useState(null);
                     </svg>
                   </button>
 
-                  {/* WhatsApp share button */}
                   <button
                     className="bg-green-600 text-white px-2 py-1 rounded-md flex items-center gap-2 hover:bg-green-700 transition-colors shadow-md"
                     onClick={onShareToWhatsApp}
@@ -279,7 +269,6 @@ const [startTouch, setStartTouch] = useState(null);
                     </svg>
                   </button>
 
-                  {/* Cancel/Close button */}
                   <button
                     className="bg-red-500 text-white px-2 py-1 rounded-md flex items-center gap-2 hover:bg-red-600 transition-colors shadow-md"
                     onClick={onToggleClipping}
@@ -289,7 +278,6 @@ const [startTouch, setStartTouch] = useState(null);
                   </button>
                 </div>
 
-                {/* Dimensions display */}
                 <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 text-white text-sm bg-black bg-opacity-50 px-2 py-1 rounded">
                   {Math.round(clipBox.width)} x {Math.round(clipBox.height)} px
                 </div>
@@ -364,7 +352,6 @@ const [startTouch, setStartTouch] = useState(null);
           align-items: center;
         }
         
-        /* Adjustments for single page display */
         .stf__parent {
           background: transparent !important;
         }
@@ -378,7 +365,6 @@ const [startTouch, setStartTouch] = useState(null);
           background: white;
         }
         
-        /* Mobile specific styles */
         @media (max-width: 768px) {
           .newspaper-book {
             width: 100% !important;
@@ -407,12 +393,10 @@ const [startTouch, setStartTouch] = useState(null);
             padding: 0 !important;
           }
           
-          /* Mobile touch optimization */
           .page-content img {
             touch-action: none !important;
           }
           
-          /* Make clip handles easier to grab on mobile */
           .absolute.cursor-move,
           [class*="cursor-n"],
           [class*="cursor-s"],

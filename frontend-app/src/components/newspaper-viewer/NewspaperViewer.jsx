@@ -12,6 +12,58 @@ import ThumbnailStrip from "./ThumbnailStrip";
 import ZoomModal from "./ZoomModal";
 import YoutubeVideo from "./YoutubeVideo";
 
+// Sample data to use as fallback
+const SAMPLE_DATA = {
+  headlines: [
+    {
+      "name": "Latest Updates",
+      "path": "/latest",
+      "_id": "680fc6be9a73cb9c85003354"
+    },
+    {
+      "name": "Featured",
+      "path": "/featured",
+      "_id": "680fc6be9a73cb9c85003355"
+    }
+  ],
+  navigationLinks: [
+    {
+      "name": "Security",
+      "path": "/security",
+      "_id": "67f240c2cf2918abb88da5ff"
+    },
+    {
+      "name": "About Us",
+      "path": "/about",
+      "_id": "67fa0d028c4eef948264a768"
+    }
+  ],
+  newspaper: {
+    "success": true,
+    "data": {
+      "_id": "681080c6a5d79a4fb0cc78a3",
+      "newspaperLinks": [
+        "https://res.cloudinary.com/dlkllp35e/image/upload/v1745911974/newspapers/s3ayxf0twvzeldvlpkwe.png",
+        "https://res.cloudinary.com/dlkllp35e/image/upload/v1745911978/newspapers/yloxfwac1dntqkyrj7ew.png",
+        "https://res.cloudinary.com/dlkllp35e/image/upload/v1745911982/newspapers/eqwbe4kfnkwtmn6rrf1v.png",
+        "https://res.cloudinary.com/dlkllp35e/image/upload/v1745911986/newspapers/nypjtkmhrptwyrmbqijn.png",
+        "https://res.cloudinary.com/dlkllp35e/image/upload/v1745911991/newspapers/n4284xkc3qnrvjah0xag.png",
+        "https://res.cloudinary.com/dlkllp35e/image/upload/v1745911996/newspapers/rfxid9tsefyoiw8kjlhh.png",
+        "https://res.cloudinary.com/dlkllp35e/image/upload/v1745912000/newspapers/sh7icjg4pu7z5qvdwypd.png",
+        "https://res.cloudinary.com/dlkllp35e/image/upload/v1745912005/newspapers/rqsybsmvxwfh7o1l00vf.png"
+      ],
+      "totalpages": 8,
+      "publicationDate": "2025-04-29T06:46:55.856Z",
+      "originalFilename": "flexbox.pdf",
+      "isPublished": true,
+      "youtubeLink": "https://youtu.be/d0Anl3tIKaA?si=Ai64A6dhxOMbJe5V",
+      "createdAt": "2025-04-29T07:33:26.211Z",
+      "updatedAt": "2025-04-29T07:33:26.211Z",
+      "__v": 0
+    }
+  }
+};
+
 export default function NewspaperViewer() {
 	const [images, setImages] = useState([]);
 	const [activeImage, setActiveImage] = useState(null);
@@ -76,6 +128,8 @@ export default function NewspaperViewer() {
 				setAvailableDates(filteredDates);
 			} catch (err) {
 				console.error("Error fetching available dates:", err);
+				// If fetching fails, use today's date as available
+				setAvailableDates([{ date: todayDateStr }]);
 			}
 		};
 		fetchAvailableDates();
@@ -95,19 +149,33 @@ export default function NewspaperViewer() {
 				}
 
 				const response = await axios.get(url);
-				const links = response.data.data.newspaperLinks.map((src, index) => ({
+				
+				// Check if response has valid data
+				if (response.data && response.data.data && response.data.data.newspaperLinks) {
+					const links = response.data.data.newspaperLinks.map((src, index) => ({
+						id: index + 1,
+						src,
+						date: selectedDate
+					}));
+					setYoutubeLink(response.data.data.youtubeLink || null);				
+					setImages(links);
+					setActiveImage(links[0] || null);
+				} else {
+					throw new Error("Invalid data format received from server");
+				}
+			} catch (err) {
+				console.error("Error fetching newspaper:", err);
+				
+				// Show sample data with a warning message
+				const sampleLinks = SAMPLE_DATA.newspaper.data.newspaperLinks.map((src, index) => ({
 					id: index + 1,
 					src,
 					date: selectedDate
 				}));
-				setYoutubeLink(response.data.data.youtubeLink || null);				
-				setImages(links);
-				setActiveImage(links[0] || null);
-			} catch (err) {
-				console.error("Error fetching newspaper:", err);
-				setError("Failed to load newspaper. Please try another date.");
-				setImages([]);
-				setActiveImage(null);
+				setYoutubeLink(SAMPLE_DATA.newspaper.data.youtubeLink || null);
+				setImages(sampleLinks);
+				setActiveImage(sampleLinks[0] || null);
+				setError("Server connection issue. Showing sample data instead.");
 			} finally {
 				setLoading(false);
 			}
@@ -124,9 +192,15 @@ export default function NewspaperViewer() {
 			setHeadlinesLoading(true);
 			try {
 				const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}/headline/get`);
-				setHeadlines(response.data || []);
+				if (response.data) {
+					setHeadlines(response.data);
+				} else {
+					throw new Error("Invalid headline data");
+				}
 			} catch (err) {
 				console.error('Failed to fetch headlines:', err);
+				// If fetching fails, use sample headlines
+				setHeadlines(SAMPLE_DATA.headlines);
 			} finally {
 				setHeadlinesLoading(false);
 			}
@@ -368,15 +442,23 @@ export default function NewspaperViewer() {
 		try {
 			const formData = new FormData();
 			formData.append('image', blob, `newspaper-clip-${selectedDate}.jpg`);
-			const response = await fetch('http://localhost:5002/newspaper/upload', {
-				method: 'POST',
-				body: formData
-			});
-			if (!response.ok) throw new Error(`Upload failed with status: ${response.status}`);
-			const data = await response.json();
-			return data.url;
+			
+			try {
+				const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/newspaper/upload`, {
+					method: 'POST',
+					body: formData
+				});
+				
+				if (!response.ok) throw new Error(`Upload failed with status: ${response.status}`);
+				const data = await response.json();
+				return data.url;
+			} catch (uploadError) {
+				console.error('Error uploading image, using local URL instead:', uploadError);
+				// Return a local blob URL if server upload fails
+				return URL.createObjectURL(blob);
+			}
 		} catch (error) {
-			console.error('Error uploading image:', error);
+			console.error('Error processing image for upload:', error);
 			throw error;
 		}
 	};
@@ -451,13 +533,18 @@ export default function NewspaperViewer() {
 			}
 			else if (action === 'facebook' || action === 'whatsapp') {
 				// For sharing, upload the image first to get a public URL
-				const publicImageUrl = await uploadImage(blob);
+				try {
+					const publicImageUrl = await uploadImage(blob);
 
-				// Then open the appropriate sharing link
-				if (action === 'facebook') {
-					window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(publicImageUrl)}`, '_blank');
-				} else if (action === 'whatsapp') {
-					window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent('Check out this newspaper clipping! ' + publicImageUrl)}`, '_blank');
+					// Then open the appropriate sharing link
+					if (action === 'facebook') {
+						window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(publicImageUrl)}`, '_blank');
+					} else if (action === 'whatsapp') {
+						window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent('Check out this newspaper clipping! ' + publicImageUrl)}`, '_blank');
+					}
+				} catch (shareError) {
+					console.error('Error sharing image:', shareError);
+					alert('Unable to share image. Please try downloading instead.');
 				}
 			}
 		} catch (err) {
@@ -534,8 +621,47 @@ export default function NewspaperViewer() {
 						<p className="mt-4 text-gray-700">Loading newspaper...</p>
 					</div>
 				) : error ? (
-					<div className="text-center p-8 text-red-500">
-						{error}
+					<div className="flex flex-col">
+						<div className="text-center p-4 text-yellow-600 bg-yellow-100 rounded mb-4">
+							{error}
+						</div>
+						<ImageViewer
+							clipContainerRef={clipContainerRef}
+							activeImage={activeImage}
+							nextImageToShow={nextImageToShow}
+							isFlipping={isFlipping}
+							flipDirection={flipDirection}
+							noTransition={noTransition}
+							isClipping={isClipping}
+							onPrevImage={prevImage}
+							onNextImage={nextImage}
+							images={images}
+							onZoomClick={() => setIsZoomed(true)}
+							clipBox={clipBox}
+							onMoveStart={handleMoveStart}
+							onResizeStart={handleResizeStart}
+							onDownloadClippedImage={downloadClippedImage}
+							onShareToFacebook={shareToFacebook}
+							onShareToWhatsApp={shareToWhatsApp}
+							onToggleClipping={toggleClippingMode}
+							clipImageLoading={clipImageLoading}
+						/>
+
+						<Pagination
+							activeImage={activeImage}
+							images={images}
+							onPageChange={goToPage}
+							isFlipping={isFlipping}
+						/>
+
+						<ThumbnailStrip
+							images={images}
+							activeImage={activeImage}
+							onPageChange={goToPage}
+							isClipping={isClipping}
+						/>
+						
+						{youtubeLink && <YoutubeVideo link={youtubeLink}/>}
 					</div>
 				) : !activeImage ? (
 					<div className="text-center p-8 text-gray-500">
@@ -578,7 +704,8 @@ export default function NewspaperViewer() {
 							onPageChange={goToPage}
 							isClipping={isClipping}
 						/>
-						<YoutubeVideo link={youtubeLink}/>
+						
+						{youtubeLink && <YoutubeVideo link={youtubeLink}/>}
 					</>
 				)}
 			</div>
