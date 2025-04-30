@@ -29,19 +29,41 @@ export default function ImageViewer({
   const [resizing, setResizing] = useState(null);
   const [startTouch, setStartTouch] = useState(null);
 
-  useEffect(() => {
-    if (activeImage) {
-      setCurrentPage(activeImage.id - 1);
+  // Track the last external page change via activeImage
+  const lastActiveImageIdRef = useRef(null);
 
-      // Sync the book's page with activeImage
-      if (bookRef.current && !isFlipping) {
-        const bookCurrentPage = bookRef.current.pageFlip().getCurrentPageIndex();
-        if (bookCurrentPage !== activeImage.id - 1) {
-          bookRef.current.pageFlip().turnToPage(activeImage.id - 1);
+  useEffect(() => {
+    // Only update the book if activeImage changed externally (not from a flip)
+    if (activeImage && (!isFlipping || noTransition)) {
+      const pageNum = activeImage.id - 1;
+
+      // Only update if it's a different page or first load
+      if (lastActiveImageIdRef.current !== activeImage.id) {
+        setCurrentPage(pageNum);
+
+        // Update the book's page if the book is initialized
+        if (bookRef.current && bookRef.current.pageFlip && !isClipping) {
+          // Use a short timeout to ensure the book is fully ready
+          setTimeout(() => {
+            try {
+              const pageFlip = bookRef.current.pageFlip();
+              if (pageFlip && typeof pageFlip.getCurrentPageIndex === 'function') {
+                const currentBookPage = pageFlip.getCurrentPageIndex();
+                if (currentBookPage !== pageNum) {
+                  pageFlip.turnToPage(pageNum);
+                }
+              }
+            } catch (error) {
+              console.log("Could not access or turn page", error);
+            }
+          }, 100);
         }
+
+        // Update the ref to track the last activeImage change
+        lastActiveImageIdRef.current = activeImage.id;
       }
     }
-  }, [activeImage, isFlipping]);
+  }, [activeImage, isFlipping, noTransition, isClipping]);
 
   useEffect(() => {
     const handleMove = (e) => {
@@ -134,12 +156,44 @@ export default function ImageViewer({
   const handlePageFlip = (e) => {
     const newPage = e.data;
     if (images[newPage]) {
+      // Update local state 
+      setCurrentPage(newPage);
+
+      // Notify parent about the change via callbacks
       if (newPage > currentPage) {
         onNextImage();
       } else if (newPage < currentPage) {
         onPrevImage();
       }
     }
+  };
+
+  const handleNextClick = () => {
+    if (bookRef.current && bookRef.current.pageFlip && !isFlipping && !isClipping) {
+      try {
+        const pageFlip = bookRef.current.pageFlip();
+        if (pageFlip && typeof pageFlip.flipNext === 'function') {
+          pageFlip.flipNext();
+        }
+      } catch (error) {
+        console.log("Could not flip next", error);
+      }
+    }
+    onNextImage();
+  };
+
+  const handlePrevClick = () => {
+    if (bookRef.current && bookRef.current.pageFlip && !isFlipping && !isClipping) {
+      try {
+        const pageFlip = bookRef.current.pageFlip();
+        if (pageFlip && typeof pageFlip.flipPrev === 'function') {
+          pageFlip.flipPrev();
+        }
+      } catch (error) {
+        console.log("Could not flip prev", error);
+      }
+    }
+    onPrevImage();
   };
 
   const renderPages = () => {
@@ -161,12 +215,7 @@ export default function ImageViewer({
     <div className="w-full flex flex-col justify-center items-center relative p-0 md:p-4">
       <button
         className="absolute left-2 top-1/2 transform -translate-y-1/2 bg-gray-700 p-2 rounded-full text-white hover:bg-gray-600 disabled:opacity-50 z-10 transition-all duration-300 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:hover:bg-gray-400"
-        onClick={() => {
-          if (bookRef.current) {
-            bookRef.current.pageFlip().flipPrev();
-          }
-          onPrevImage();
-        }}
+        onClick={handlePrevClick}
         disabled={images.length <= 1 || isFlipping || activeImage?.id === 1 || isClipping}
         aria-label="Previous page"
       >
@@ -317,7 +366,7 @@ export default function ImageViewer({
               maxShadowOpacity={0.5}
               showPageCorners={true}
               disableTouch={true}
-              disableFlipByClick={false}
+              disableFlipByClick={true}
             >
               {renderPages()}
             </HTMLFlipBook>
@@ -327,12 +376,7 @@ export default function ImageViewer({
 
       <button
         className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-gray-700 p-2 rounded-full text-white hover:bg-gray-600 disabled:opacity-50 z-10 transition-all duration-300 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:hover:bg-gray-400"
-        onClick={() => {
-          if (bookRef.current) {
-            bookRef.current.pageFlip().flipNext();
-          }
-          onNextImage();
-        }}
+        onClick={handleNextClick}
         disabled={images.length <= 1 || isFlipping || activeImage?.id === images.length || isClipping}
         aria-label="Next page"
       >
@@ -374,6 +418,22 @@ export default function ImageViewer({
           background: white;
         }
         
+        
+        /* Disable page click events */
+        .stf__block .page-wrapper {
+          pointer-events: none !important;
+        }
+        
+        .stf__block .--left, 
+        .stf__block .--right {
+          pointer-events: none !important;
+        }
+        
+        /* Enable pointer events for the image itself so it can still be clicked for zoom */
+        .page-content img {
+          pointer-events: auto !important;
+        }
+          
         @media (max-width: 768px) {
           .newspaper-book {
             width: 100% !important;
