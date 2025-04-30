@@ -1,75 +1,10 @@
 // authController.js
 const UserDetails = require("../model/User"); // Adjust path as needed
-const AdminLogo = require('../model/AdminLogo'); // Adjust path as needed
-const cloudinary = require('../cloudinary/config');
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const multer = require('multer');
-const fs = require('fs');
-const path = require('path');
-const { promisify } = require('util')
 
 require("dotenv").config();
 
-// Promisify file system functions
-const unlink = promisify(fs.unlink);
-const mkdir = promisify(fs.mkdir);
-
-// Configure temp directories
-const TEMP_DIR = path.join(__dirname, '..', 'temp');
-const LOGOS_DIR = path.join(TEMP_DIR, 'logos');
-
-// Ensure temp directories exist
-const ensureDirsExist = async () => {
-  if (!fs.existsSync(TEMP_DIR)) await mkdir(TEMP_DIR, { recursive: true });
-  if (!fs.existsSync(LOGOS_DIR)) await mkdir(LOGOS_DIR, { recursive: true });
-};
-
-// Configure multer for PDF uploads
-const storage = multer.diskStorage({
-  destination: async (req, file, cb) => {
-    try {
-      await ensureDirsExist();
-      cb(null, TEMP_DIR);
-    } catch (error) {
-      cb(error);
-    }
-  },
-  filename: (req, file, cb) => {
-    const safeName = file.originalname.replace(/[^a-zA-Z0-9.]/g, '_');
-    cb(null, `upload-${Date.now()}-${safeName}`);
-  }
-});
-
-// Set up multer upload
-const logoUpload = multer({
-  storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
-  fileFilter: (req, file, cb) => {
-    // Accept only image files
-    if (file.mimetype.startsWith('image/')) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only image files are allowed'), false);
-    }
-  }
-});
-
-// Upload logo to Cloudinary
-const uploadLogoToCloudinary = async (filePath) => {
-  try {
-    const result = await cloudinary.uploader.upload(filePath, {
-      folder: 'admin-logos',
-      resource_type: 'image'
-    });
-
-    return {
-      logoUrl: result.secure_url
-    };
-  } catch (error) {
-    throw new Error(`Failed to upload logo: ${error.message}`);
-  }
-};
 
 // Generate JWT Token
 const generateToken = (user) => {
@@ -131,27 +66,16 @@ const login = async (req, res) => {
     // Generate token
     const token = generateToken(user);
 
-    const userResponse = {
-      id: user._id,
-      fullname: user.fullname,
-      email: user.email,
-      role: user.role,
-      permissions: user.permissions,
-      lastLogin: user.lastLogin
-    };
-
-    // If user is an admin, look for a logo
-    if (user.role === "admin") {
-      const adminLogo = await AdminLogo.findOne({ userId: user._id });
-      if (adminLogo) {
-        userResponse.logo = adminLogo.logoUrl;
-        console.log("Admin logo found:", adminLogo.logoUrl);        
-      }
-    }
-
     res.json({
       token,
-      user: userResponse
+      user: {
+        id: user._id,
+        fullname: user.fullname,
+        email: user.email,
+        role: user.role,
+        permissions: user.permissions,
+        lastLogin: user.lastLogin
+      }
     });
   } catch (error) {
     console.error(error);
@@ -167,36 +91,14 @@ const addAdmin = async (req, res) => {
     if (!fullname || !email || !password || !role || !(permissions.length > 0)) {
       return res.status(400).send({ error: "All fields are required..." });
     }
-
+    
     const isEmailExisting = await UserDetails.findOne({ email });
     if (isEmailExisting) {
       return res.status(400).send({ error: `${email} email already exists. Please try with another email.` });
     }
-    // Create and save the admin user
-    const newAdmin = new UserDetails({ fullname, email, password, role, permissions });
-    const savedAdmin = await newAdmin.save();
-
-    // Process logo upload if present
-    if (req.file) {
-      try {
-        // Upload to Cloudinary
-        const { logoUrl } = await uploadLogoToCloudinary(req.file.path);
-
-        // Create admin logo record
-        const adminLogo = new AdminLogo({
-          userId: savedAdmin._id,
-          logoUrl
-        });
-        await adminLogo.save();
-
-        // Clean up temporary file
-        await unlink(req.file.path).catch(err => console.warn('File cleanup error:', err));
-      } catch (logoError) {
-        console.error("Logo upload error:", logoError);
-        // Continue without logo if there's an error with the logo processing
-      }
-    }
-
+    
+    const saveAdmin = new UserDetails({ fullname, email, password, role, permissions });
+    await saveAdmin.save();
     res.status(201).send({ message: `Admin details added with email: ${email}` });
   } catch (error) {
     console.log("Error in addAdmin: ", error);
@@ -208,11 +110,10 @@ const addAdmin = async (req, res) => {
 const getAdmins = async (req, res) => {
   try {
     // Exclude regular users and superadmins if needed
-    const admins = await UserDetails.find({
-      role: 'admin'
-    }
+    const admins = await UserDetails.find({ 
+      role: 'admin' } 
     ).select('-password -otp'); // Exclude sensitive fields
-
+    
     res.status(200).send(admins);
   } catch (error) {
     console.log("Error in getAdmins: ", error);
@@ -265,7 +166,7 @@ const deleteAdmin = async (req, res) => {
       return res.status(403).send({ error: "Cannot delete superadmin" });
     }
 
-    await UserDetails.findByIdAndDelete(id);
+    await User.findByIdAndDelete(id);
     res.status(200).send({ message: "Admin deleted successfully" });
   } catch (error) {
     console.log("Error in deleteAdmin: ", error);
@@ -295,7 +196,7 @@ const updatePassword = async (req, res) => {
     // Hash new password
     const salt = await bcrypt.genSalt(10);
     user.password = await bcrypt.hash(newPassword, salt);
-
+    
     await user.save();
 
     res.json({ message: "Password updated successfully" });
@@ -389,7 +290,7 @@ module.exports = {
   forgotPassword,
   resetPassword,
   createDefaultAdmin,
-  addAdmin: [logoUpload.single('logo'), addAdmin],
+  addAdmin,
   getAdmins,
   updateAdminPermissions,
   deleteAdmin
