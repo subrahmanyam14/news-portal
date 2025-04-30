@@ -5,7 +5,6 @@ import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { User, LogOut, Clock } from 'lucide-react';
 
 // Custom CSS for animations
 const customStyles = `
@@ -33,7 +32,6 @@ const customStyles = `
 const Dashboard = () => {
   // User permissions state
   const [userPermissions, setUserPermissions] = useState([]);
-  const [userData, setUserData] = useState(null);
 
   // Original state variables
   const [newspaper, setNewspaper] = useState(null);
@@ -60,6 +58,8 @@ const Dashboard = () => {
   const [editingHeadline, setEditingHeadline] = useState(null);
   const [multipleHeadlines, setMultipleHeadlines] = useState('');
   const [isHeadlineEditModalOpen, setIsHeadlineEditModalOpen] = useState(false);
+  const [headlineCategories, setHeadlineCategories] = useState([]);
+  const [newCategory, setNewCategory] = useState('');
 
   // Tab state
   const [activeTab, setActiveTab] = useState('');
@@ -78,7 +78,6 @@ const Dashboard = () => {
       const userDataString = localStorage.getItem('user');
       if (userDataString) {
         const userData = JSON.parse(userDataString);
-        setUserData(userData);
         const permissions = userData.permissions || [];
         setUserPermissions(permissions);
 
@@ -294,22 +293,6 @@ const Dashboard = () => {
         day: 'numeric',
         month: 'short',
         year: 'numeric'
-      });
-    } catch (error) {
-      console.error('Date formatting error:', error);
-      return 'Invalid Date';
-    }
-  };
-
-  const formatDataNTime = (dateString) => {
-    if (!dateString) return 'N/A';
-    try {
-      return new Date(dateString).toLocaleString('en-US', {
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
       });
     } catch (error) {
       console.error('Date formatting error:', error);
@@ -1295,34 +1278,12 @@ const Dashboard = () => {
       <EditLinkModal />
       <HeadlineEditModal />
 
-      <div className="max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <h1 className="text-2xl font-bold text-gray-800 mb-6 text-center">Admin Dashboard</h1>
 
-        <div className="flex justify-between items-center">
-          {userData && (
-            <div className="flex items-center space-x-4">
-              <img
-                src={userData.logo || 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTkCYZNkMxTcVT1nEJk2g7UmdfL2BJkXdst9Q&s'}
-                alt="Profile"
-                className="w-14 h-14 rounded-full border border-gray-300"
-              />
-              <div className="flex flex-col">
-                <span className="text-lg font-semibold text-gray-800">{userData.fullname}</span>
-                <span className="text-sm text-gray-500">{userData.email}</span>
-              </div>
-            </div>
-          )}
-          <div>
-            <h1 className="text-2xl font-bold text-gray-800 mb-6 text-center">Admin Dashboard</h1>
-            {/* Enhanced Tabs */}
-            <div className="mb-8">
-              {renderTabs()}
-            </div>
-          </div>
-          {userData && (
-            <div>
-              <p className="text-sm text-gray-500">Last Login: {formatDataNTime(userData.lastLogin)}</p>
-            </div>
-          )}
+        {/* Enhanced Tabs */}
+        <div className="mb-8">
+          {renderTabs()}
         </div>
 
         <div className="bg-white rounded-lg shadow-lg p-6 border border-[#403fbb]">
@@ -1371,7 +1332,7 @@ const Dashboard = () => {
           {activeTab === 'headlines' && renderHeadlinesSection()}
         </div>
       </div>
-    </div >
+    </div>
   );
 };
 
