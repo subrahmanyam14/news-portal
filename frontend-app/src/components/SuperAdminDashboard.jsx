@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -11,6 +11,7 @@ const SuperAdminDashboard = () => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [showPermissionsModal, setShowPermissionsModal] = useState(false);
   const [currentAdmin, setCurrentAdmin] = useState(null);
+  const fileInputRef = useRef(null);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -20,6 +21,10 @@ const SuperAdminDashboard = () => {
     role: 'admin',
     permissions: []
   });
+
+  // Logo preview state
+  const [logoPreview, setLogoPreview] = useState(null);
+  const [logoFile, setLogoFile] = useState(null);
 
   // Permissions modal state
   const [permissionsData, setPermissionsData] = useState({
@@ -46,11 +51,11 @@ const SuperAdminDashboard = () => {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
-      
+
       if (!response.ok) {
         throw new Error('Failed to fetch admins');
       }
-      
+
       const data = await response.json();
       setAdmins(data);
     } catch (error) {
@@ -70,13 +75,48 @@ const SuperAdminDashboard = () => {
     });
   };
 
+  const handleLogoChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Validate file type
+    const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/svg+xml'];
+    if (!validTypes.includes(file.type)) {
+      toast.error('Please select a valid image file (JPEG, PNG, GIF, SVG)');
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image size should be less than 5MB');
+      return;
+    }
+
+    setLogoFile(file);
+
+    // Create preview URL
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setLogoPreview(reader.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveLogo = () => {
+    setLogoPreview(null);
+    setLogoFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   const handlePermissionChange = (e) => {
     const { name, checked } = e.target;
     const backendPermissionName = permissionMap[name];
-    
+
     setFormData(prev => {
       let newPermissions = [...prev.permissions];
-      
+
       if (checked) {
         // Add permission if not already present
         if (!newPermissions.includes(backendPermissionName)) {
@@ -86,7 +126,7 @@ const SuperAdminDashboard = () => {
         // Remove permission
         newPermissions = newPermissions.filter(p => p !== backendPermissionName);
       }
-      
+
       return {
         ...prev,
         permissions: newPermissions
@@ -98,10 +138,10 @@ const SuperAdminDashboard = () => {
   const handleModalPermissionChange = (e) => {
     const { name, checked } = e.target;
     const backendPermissionName = permissionMap[name];
-    
+
     setPermissionsData(prev => {
       let newPermissions = [...prev.permissions];
-      
+
       if (checked) {
         // Add permission if not already present
         if (!newPermissions.includes(backendPermissionName)) {
@@ -111,7 +151,7 @@ const SuperAdminDashboard = () => {
         // Remove permission
         newPermissions = newPermissions.filter(p => p !== backendPermissionName);
       }
-      
+
       return {
         ...prev,
         permissions: newPermissions
@@ -127,6 +167,11 @@ const SuperAdminDashboard = () => {
       role: 'admin',
       permissions: []
     });
+    setLogoPreview(null);
+    setLogoFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
   const resetPermissionsModal = () => {
@@ -140,21 +185,38 @@ const SuperAdminDashboard = () => {
   // CRUD operations
   const createAdmin = async (e) => {
     e.preventDefault();
+
+    // Create FormData object to handle file upload
+    const formDataObj = new FormData();
+    formDataObj.append('fullname', formData.fullname);
+    formDataObj.append('email', formData.email);
+    formDataObj.append('password', formData.password);
+    formDataObj.append('role', formData.role);
+
+    // Append each permission
+    formData.permissions.forEach(permission => {
+      formDataObj.append('permissions[]', permission);
+    });
+
+    // Append logo file if exists
+    if (logoFile) {
+      formDataObj.append('logo', logoFile);
+    }
+
     try {
       const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/user/admins`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
-        body: JSON.stringify(formData)
+        body: formDataObj
       });
-      
+
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to create admin');
       }
-      
+
       await fetchAdmins();
       toast.success(`Admin ${formData.fullname} has been created successfully!`);
       setShowAddForm(false);
@@ -178,12 +240,12 @@ const SuperAdminDashboard = () => {
           permissions: permissionsData.permissions
         })
       });
-      
+
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to update admin permissions');
       }
-      
+
       await fetchAdmins();
       toast.success(`Permissions for ${currentAdmin.fullname} have been updated successfully!`);
       resetPermissionsModal();
@@ -197,7 +259,7 @@ const SuperAdminDashboard = () => {
     if (!window.confirm('Are you sure you want to delete this admin?')) {
       return;
     }
-    
+
     try {
       const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/user/admins/${adminId}`, {
         method: 'DELETE',
@@ -205,12 +267,12 @@ const SuperAdminDashboard = () => {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
-      
+
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to delete admin');
       }
-      
+
       await fetchAdmins();
       toast.success(`Admin ${adminName} has been deleted successfully!`);
     } catch (error) {
@@ -258,7 +320,7 @@ const SuperAdminDashboard = () => {
             required
           />
         </div>
-        
+
         <div className="mb-4">
           <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="email">
             Email
@@ -273,7 +335,7 @@ const SuperAdminDashboard = () => {
             required
           />
         </div>
-        
+
         <div className="mb-4">
           <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="password">
             Password
@@ -289,7 +351,56 @@ const SuperAdminDashboard = () => {
             minLength="6"
           />
         </div>
-        
+
+        {/* Logo Upload Section */}
+        <div className="mb-4">
+          <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="logo">
+            Admin Logo (Optional)
+          </label>
+          <input
+            type="file"
+            id="logo"
+            name="logo"
+            ref={fileInputRef}
+            onChange={handleLogoChange}
+            className="hidden"
+            accept="image/jpeg,image/png,image/gif,image/svg+xml"
+          />
+          <div className="flex items-center">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current.click()}
+              className="bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+            >
+              Select Image
+            </button>
+            {logoPreview && (
+              <button
+                type="button"
+                onClick={handleRemoveLogo}
+                className="ml-2 text-red-500 hover:text-red-700"
+              >
+                Remove
+              </button>
+            )}
+          </div>
+          {logoPreview && (
+            <div className="mt-3">
+              <p className="text-sm mb-1">Preview:</p>
+              <div className="border rounded p-2 w-32 h-32 flex items-center justify-center">
+                <img
+                  src={logoPreview}
+                  alt="Logo Preview"
+                  className="max-w-full max-h-full object-contain"
+                />
+              </div>
+            </div>
+          )}
+          <p className="text-xs text-gray-500 mt-1">
+            Accepted formats: JPEG, PNG, GIF, SVG. Max size: 5MB.
+          </p>
+        </div>
+
         <div className="mb-4">
           <h3 className="block text-gray-700 text-sm font-bold mb-2">Permissions</h3>
           <div className="pl-4">
@@ -310,7 +421,7 @@ const SuperAdminDashboard = () => {
             ))}
           </div>
         </div>
-        
+
         <div className="flex items-center justify-between">
           <button
             type="submit"
@@ -341,14 +452,14 @@ const SuperAdminDashboard = () => {
           <h2 className="text-xl font-semibold">
             Edit Permissions for {currentAdmin?.fullname}
           </h2>
-          <button 
+          <button
             onClick={resetPermissionsModal}
             className="text-gray-500 hover:text-gray-700"
           >
             &times;
           </button>
         </div>
-        
+
         <form onSubmit={updateAdminPermissions}>
           <div className="mb-4">
             <h3 className="block text-gray-700 text-sm font-bold mb-2">Permissions</h3>
@@ -370,7 +481,7 @@ const SuperAdminDashboard = () => {
               ))}
             </div>
           </div>
-          
+
           <div className="flex items-center justify-between">
             <button
               type="submit"
@@ -395,7 +506,7 @@ const SuperAdminDashboard = () => {
     <div className="container mx-auto px-4 py-8">
       <ToastContainer position="top-right" autoClose={3000} hideProgressBar={false} />
       <h1 className="text-3xl font-bold mb-6">Super Admin Dashboard</h1>
-      
+
       {!showAddForm && (
         <button
           onClick={() => {
@@ -407,13 +518,13 @@ const SuperAdminDashboard = () => {
           Add New Admin
         </button>
       )}
-      
+
       {showAddForm && renderAdminForm()}
       {showPermissionsModal && renderPermissionsModal()}
-      
+
       <div className="bg-white shadow-md rounded-lg overflow-hidden">
         <h2 className="text-xl font-semibold px-6 py-4 bg-gray-100">Manage Admins</h2>
-        
+
         {loading ? (
           <div className="p-6 text-center">
             <p>Loading administrators...</p>
@@ -429,6 +540,7 @@ const SuperAdminDashboard = () => {
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Full Name</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                  {/* <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Logo</th> */}
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Permissions</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
@@ -439,11 +551,24 @@ const SuperAdminDashboard = () => {
                   <tr key={admin._id}>
                     <td className="px-6 py-4 whitespace-nowrap">{admin.fullname}</td>
                     <td className="px-6 py-4 whitespace-nowrap">{admin.email}</td>
+                    {/* <td className="px-6 py-4 whitespace-nowrap">
+                      {admin.logo ? (
+                        <div className="w-10 h-10 rounded border overflow-hidden">
+                          <img
+                            src={admin.logo}
+                            alt={`${admin.fullname}'s logo`}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      ) : (
+                        <span className="text-gray-400">No logo</span>
+                      )}
+                    </td> */}
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                        ${admin.role === 'superadmin' ? 'bg-purple-100 text-purple-800' : 
-                          admin.role === 'admin' ? 'bg-blue-100 text-blue-800' : 
-                          'bg-green-100 text-green-800'}`}>
+                        ${admin.role === 'superadmin' ? 'bg-purple-100 text-purple-800' :
+                          admin.role === 'admin' ? 'bg-blue-100 text-blue-800' :
+                            'bg-green-100 text-green-800'}`}>
                         {admin.role}
                       </span>
                     </td>
