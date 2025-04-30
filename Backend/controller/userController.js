@@ -166,7 +166,7 @@ const deleteAdmin = async (req, res) => {
       return res.status(403).send({ error: "Cannot delete superadmin" });
     }
 
-    await User.findByIdAndDelete(id);
+    await UserDetails.findByIdAndDelete(id);
     res.status(200).send({ message: "Admin deleted successfully" });
   } catch (error) {
     console.log("Error in deleteAdmin: ", error);
