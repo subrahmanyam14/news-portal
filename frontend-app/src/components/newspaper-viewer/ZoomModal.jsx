@@ -10,6 +10,7 @@ export default function ZoomModal({ activeImage, onClose }) {
   const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
   const [touchDistance, setTouchDistance] = useState(null);
   const [initialZoom, setInitialZoom] = useState(75);
+  const [isZoomedIn, setIsZoomedIn] = useState(false);
 
   const containerRef = useRef(null);
   const zoomedImageRef = useRef(null);
@@ -65,9 +66,24 @@ export default function ZoomModal({ activeImage, onClose }) {
     zoomToPoint(clientX, clientY, newZoom);
   };
 
-  const resetZoom = () => {
-    setZoomLevel(75);
-    setPosition({ x: 0, y: 0 });
+  const toggleZoom = (e) => {
+    if (isZoomedIn) {
+      // Zoom out to initial
+      setZoomLevel(75);
+      setPosition({ x: 0, y: 0 });
+      setIsZoomedIn(false);
+    } else {
+      // Zoom in to preset level (200% or max zoom / 2)
+      const zoomTarget = Math.min(200, calculateMaxZoom());
+      const centerX = containerRef.current ? containerRef.current.clientWidth / 2 : 0;
+      const centerY = containerRef.current ? containerRef.current.clientHeight / 2 : 0;
+      zoomToPoint(
+        e.clientX || centerX, 
+        e.clientY || centerY, 
+        zoomTarget
+      );
+      setIsZoomedIn(true);
+    }
   };
 
   const calculateConstraints = (zoom = zoomLevel) => {
@@ -107,6 +123,7 @@ export default function ZoomModal({ activeImage, onClose }) {
     const newZoom = Math.min(Math.max(zoomLevel + (delta * zoomStep), 50), calculateMaxZoom());
     if (newZoom !== zoomLevel) {
       zoomToPoint(e.clientX, e.clientY, newZoom);
+      setIsZoomedIn(newZoom > 75);
     }
   };
 
@@ -198,6 +215,7 @@ export default function ZoomModal({ activeImage, onClose }) {
           calculateMaxZoom()
         );
         zoomToPoint(midpoint.x, midpoint.y, newZoom);
+        setIsZoomedIn(newZoom > 75);
       }
     }
   };
@@ -233,6 +251,10 @@ export default function ZoomModal({ activeImage, onClose }) {
     };
   }, []);
 
+  useEffect(() => {
+    setIsZoomedIn(zoomLevel > 75);
+  }, [zoomLevel]);
+
   if (!activeImage) return null;
 
   return (
@@ -264,10 +286,10 @@ export default function ZoomModal({ activeImage, onClose }) {
             </button>
             <button
               className="bg-gray-700 p-2 rounded hover:bg-gray-600 text-white"
-              onClick={resetZoom}
-              title="Reset Zoom"
+              onClick={toggleZoom}
+              title={isZoomedIn ? "Reset Zoom" : "Quick Zoom"}
             >
-              {zoomLevel === 75 ? <Maximize size={20} /> : <Minimize size={20} />}
+              {isZoomedIn ? <Minimize size={20} /> : <Maximize size={20} />}
             </button>
             <span className="text-white ml-2">{zoomLevel}% (Max: {calculateMaxZoom()}%)</span>
           </div>
@@ -325,7 +347,7 @@ export default function ZoomModal({ activeImage, onClose }) {
 
         {/* Instructions */}
         <div className="bg-gray-800 text-gray-300 text-xs md:text-sm p-2 text-center rounded-b-lg">
-          <p className="hidden md:block">Scroll to zoom. Click and drag to pan. Zoom happens at mouse pointer position.</p>
+          <p className="hidden md:block">Scroll to zoom. Click and drag to pan. Click the {isZoomedIn ? "Minimize" : "Maximize"} button to toggle zoom.</p>
           <p className="md:hidden">Pinch to zoom. Touch and drag to pan.</p>
         </div>
       </div>
