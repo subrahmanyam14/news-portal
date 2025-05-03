@@ -222,7 +222,7 @@ export default function ImageViewer({
         <ChevronLeft size={24} />
       </button>
 
-      <div className="w-full flex justify-center items-center" style={{ height: '80vh' }}>
+      <div className="w-full flex justify-center items-center" style={{ height: '100vh' }}>
         {isClipping ? (
           <div className="relative" ref={clipContainerRef}>
             <img
@@ -345,12 +345,12 @@ export default function ImageViewer({
           <div className="flip-book-container">
             <HTMLFlipBook
               ref={bookRef}
-              width={500}
-              height={700}
+              width={600}
+              height={800}
               size="stretch"
-              minWidth={300}
+              minWidth={400}
               maxWidth={1000}
-              minHeight={400}
+              minHeight={500}
               maxHeight={1000}
               drawShadow={true}
               flippingTime={1000}

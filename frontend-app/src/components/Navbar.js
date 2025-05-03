@@ -42,7 +42,6 @@ const Navbar = () => {
     const fetchLogo = async () => {
       try {
         const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}/logo`);
-console.log(response.data);
 
         // Check if the response is valid and has data
         if (response.status === 200 && response.data.success) {
