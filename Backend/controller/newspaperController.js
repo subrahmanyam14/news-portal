@@ -8,6 +8,7 @@ const path = require('path');
 const { promisify } = require('util')
 const cloudinary = require('../cloudinary/config');
 const {NewspaperDetails} = require('../model/NewPaper');
+const supabase = require("../supabase/config");
 
 // Promisify file system functions
 const unlink = promisify(fs.unlink);
@@ -108,39 +109,35 @@ const optimizeImages = async (imagePaths) => {
   return optimizedPaths;
 };
 
-// Upload Images to Cloudinary (100% Quality)
-const uploadToCloudinary = async (imagePaths) => {
+// Upload Images to SupaBase (100% Quality)
+const uploadToSupabase = async (imagePaths) => {
   const urls = [];
-  const MAX_RETRIES = 3;
 
   for (const imagePath of imagePaths) {
-    let retries = 0;
-    let uploaded = false;
+    const fileName = path.basename(imagePath);
+    const fileBuffer = fs.readFileSync(imagePath);
 
-    while (!uploaded && retries < MAX_RETRIES) {
-      try {
-        const result = await cloudinary.uploader.upload(imagePath, {
-          folder: 'newspapers',
-          quality: 100, // MAX quality
-          format: 'png', // Lossless PNG format
-          timeout: 180000 // 3 min timeout
-        });
+    const { data, error } = await supabase.storage
+      .from(process.env.SUPABASE_BUCKET)
+      .upload(`uploads/${Date.now()}-${fileName}`, fileBuffer, {
+        contentType: 'image/png',
+        upsert: false
+      });
 
-        urls.push(result.secure_url);
-        uploaded = true;
-      } catch (uploadError) {
-        retries++;
-        console.warn(`Upload retry ${retries}/${MAX_RETRIES} for ${path.basename(imagePath)}: ${uploadError.message}`);
-        if (retries >= MAX_RETRIES) throw uploadError;
-        await new Promise(resolve => setTimeout(resolve, 2000 * retries));
-      }
+    if (error) {
+      console.error(`Upload failed for ${fileName}:`, error.message);
+      throw new Error(`Failed to upload ${fileName}`);
     }
 
-    await unlink(imagePath); // Cleanup local file
+    const publicUrl = `https://${supabase.supabaseUrl}/storage/v1/object/public/${process.env.SUPABASE_BUCKET}/${data.path}`;
+    urls.push(publicUrl);
+
+    await unlink(imagePath); // Cleanup
   }
 
   return urls;
 };
+
 
 // Controller for Newspaper Upload
 const uploadNewspaper = async (req, res) => {
@@ -173,7 +170,7 @@ const uploadNewspaper = async (req, res) => {
     console.log(`Optimized ${optimizedImagePaths.length} images successfully`);
 
     console.log('Uploading images to Cloudinary...');
-    const imageUrls = await uploadToCloudinary(optimizedImagePaths);
+    const imageUrls = await uploadToSupabase(optimizedImagePaths);
     console.log(`Successfully uploaded ${imageUrls.length} images to Cloudinary`);
 
     const newspaper = new NewspaperDetails({
