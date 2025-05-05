@@ -129,7 +129,7 @@ const uploadToSupabase = async (imagePaths) => {
       throw new Error(`Failed to upload ${fileName}`);
     }
 
-    const publicUrl = `https://${supabase.supabaseUrl}/storage/v1/object/public/${process.env.SUPABASE_BUCKET}/${data.path}`;
+    const publicUrl = `${supabase.supabaseUrl}/storage/v1/object/public/${process.env.SUPABASE_BUCKET}/${data.path}`;
     urls.push(publicUrl);
 
     await unlink(imagePath); // Cleanup
