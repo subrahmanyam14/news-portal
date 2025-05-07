@@ -74,7 +74,7 @@ const convertPDFToImages = async (pdfPath, outputDir) => {
       format: 'png', 
       out_dir: outputDir,
       out_prefix: 'page',
-      scale: 1200 // MAX DPI for crystal-clear images
+      scale: 600
     };
 
     await poppler.convert(pdfPath, options);
