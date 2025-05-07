@@ -1,19 +1,18 @@
 const express = require('express');
 const multer = require('multer');
 const { PDFDocument } = require('pdf-lib');
-const poppler = require('pdf-poppler');
-const sharp = require('sharp');
+const { fromPath } = require('pdf2pic');
 const fs = require('fs');
 const path = require('path');
-const { promisify } = require('util')
-const cloudinary = require('../cloudinary/config');
-const {NewspaperDetails} = require('../model/NewPaper');
+const { promisify } = require('util');
 const supabase = require("../supabase/config");
+const {NewspaperDetails} = require('../model/NewPaper');
 
 // Promisify file system functions
 const unlink = promisify(fs.unlink);
 const rm = promisify(fs.rm);
 const mkdir = promisify(fs.mkdir);
+const readdir = promisify(fs.readdir);
 
 // Configure temp directories
 const TEMP_DIR = path.join(__dirname, '..', 'temp');
@@ -43,7 +42,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 100 * 1024 * 1024 }, // Increased to 100MB
+  limits: { fileSize: 100 * 1024 * 1024 }, // 100MB
   fileFilter: (req, file, cb) => {
     if (file.mimetype === 'application/pdf') cb(null, true);
     else cb(new Error('Only PDF files are allowed'), false);
@@ -65,24 +64,40 @@ const validatePDF = async (pdfPath) => {
   }
 };
 
-// Convert PDF to Ultra-HD Images
+// Convert PDF to Images using pdf2pic
 const convertPDFToImages = async (pdfPath, outputDir) => {
   try {
     if (!fs.existsSync(outputDir)) await mkdir(outputDir, { recursive: true });
-
+    
+    const pageCount = await validatePDF(pdfPath);
+    const imagePaths = [];
+    
+    // Setup pdf2pic options for high quality
     const options = {
-      format: 'png', 
-      out_dir: outputDir,
-      out_prefix: 'page',
-      scale: 1200 // MAX DPI for crystal-clear images
+      density: 300, // Higher DPI for better quality
+      saveFilename: 'page',
+      savePath: outputDir,
+      format: 'png',
+      width: 2480, // A4 size at 300 DPI
+      height: 3508,
+      quality: 100 // Maximum quality
     };
-
-    await poppler.convert(pdfPath, options);
-
-    const imagePaths = fs.readdirSync(outputDir)
-      .filter(file => file.endsWith('.png'))
-      .map(file => path.join(outputDir, file));
-
+    
+    // Initialize pdf2pic converter
+    const convert = fromPath(pdfPath, options);
+    
+    // Convert each page
+    for (let i = 1; i <= pageCount; i++) {
+      console.log(`Converting page ${i} of ${pageCount}...`);
+      const result = await convert(i);
+      
+      if (result && result.path) {
+        imagePaths.push(result.path);
+      } else {
+        console.warn(`Warning: No path returned for page ${i}`);
+      }
+    }
+    
     return imagePaths;
   } catch (error) {
     console.error('PDF conversion error:', error);
@@ -90,26 +105,7 @@ const convertPDFToImages = async (pdfPath, outputDir) => {
   }
 };
 
-// Optimize Images WITHOUT Losing Quality
-const optimizeImages = async (imagePaths) => {
-  const optimizedPaths = [];
-
-  for (const imagePath of imagePaths) {
-    const optimizedPath = imagePath.replace('.png', '_optimized.png');
-
-    await sharp(imagePath)
-      .png({ compressionLevel: 0 }) // No compression = 100% quality
-      .toFile(optimizedPath);
-
-    await unlink(imagePath); // Remove original file
-    fs.renameSync(optimizedPath, imagePath); // Rename optimized file
-    optimizedPaths.push(imagePath);
-  }
-
-  return optimizedPaths;
-};
-
-// Upload Images to SupaBase (100% Quality)
+// Upload Images to Supabase
 const uploadToSupabase = async (imagePaths) => {
   const urls = [];
 
@@ -132,12 +128,11 @@ const uploadToSupabase = async (imagePaths) => {
     const publicUrl = `${supabase.supabaseUrl}/storage/v1/object/public/${process.env.SUPABASE_BUCKET}/${data.path}`;
     urls.push(publicUrl);
 
-    await unlink(imagePath); // Cleanup
+    await unlink(imagePath).catch(err => console.warn(`Image cleanup error for ${fileName}:`, err));
   }
 
   return urls;
 };
-
 
 // Controller for Newspaper Upload
 const uploadNewspaper = async (req, res) => {
@@ -147,6 +142,7 @@ const uploadNewspaper = async (req, res) => {
   let pageCount = 0;
 
   try {
+    // Clean up previous files if they exist
     await rm(PAGES_DIR, { recursive: true, force: true }).catch(() => {});
     await mkdir(PAGES_DIR, { recursive: true });
 
@@ -162,16 +158,11 @@ const uploadNewspaper = async (req, res) => {
 
     console.log('Converting PDF to images...');
     const imagePaths = await convertPDFToImages(pdfPath, PAGES_DIR);
-    console.log(`Generate
-      d ${imagePaths.length} ultra-HD images from PDF`);
+    console.log(`Generated ${imagePaths.length} high-quality images from PDF`);
 
-    console.log('Optimizing images...');
-    const optimizedImagePaths = await optimizeImages(imagePaths);
-    console.log(`Optimized ${optimizedImagePaths.length} images successfully`);
-
-    console.log('Uploading images to Cloudinary...');
-    const imageUrls = await uploadToSupabase(optimizedImagePaths);
-    console.log(`Successfully uploaded ${imageUrls.length} images to Cloudinary`);
+    console.log('Uploading images to Supabase...');
+    const imageUrls = await uploadToSupabase(imagePaths);
+    console.log(`Successfully uploaded ${imageUrls.length} images to Supabase`);
 
     const newspaper = new NewspaperDetails({
       newspaperLinks: imageUrls,
@@ -179,14 +170,15 @@ const uploadNewspaper = async (req, res) => {
       originalFilename: req.file.originalname,
       publicationDate: publicationDate,
       isPublished: isPublished,
-      youtubeLink: (req.body.youtubeLink !== (undefined || null)? req.body.youtubeLink: null)
+      youtubeLink: (req.body.youtubeLink !== (undefined || null) ? req.body.youtubeLink : null)
     });
 
     await newspaper.save();
     console.log('Newspaper saved to database');
 
-    await unlink(pdfPath);
-    await rm(PAGES_DIR, { recursive: true, force: true });
+    // Clean up temporary files
+    await unlink(pdfPath).catch(err => console.warn('PDF cleanup error:', err));
+    await rm(PAGES_DIR, { recursive: true, force: true }).catch(err => console.warn('Pages dir cleanup error:', err));
 
     return res.json({
       success: true,
@@ -201,8 +193,10 @@ const uploadNewspaper = async (req, res) => {
     });
   } catch (error) {
     console.error('Upload process error:', error);
+    // Clean up in case of error
     await unlink(pdfPath).catch(err => console.warn('PDF cleanup error:', err));
     await rm(PAGES_DIR, { recursive: true, force: true }).catch(err => console.warn('Pages dir cleanup error:', err));
+    
     return res.status(500).json({
       success: false,
       message: 'Failed to process newspaper upload',
@@ -440,7 +434,8 @@ const getNewspapersIncludeFuture = async (req, res) => {
     });
   }
 };
-const deleteNewspaper = async( req, res ) => {
+
+const deleteNewspaper = async(req, res) => {
   try {
     const {id} = req.params;
     const deleteNewspaperDetails = await NewspaperDetails.findByIdAndDelete(id);
@@ -463,7 +458,7 @@ const deleteNewspaper = async( req, res ) => {
       error: error.message
     });
   }
-}
+};
 
 const uploadImage = async (req, res) => {
   try {
@@ -471,19 +466,34 @@ const uploadImage = async (req, res) => {
       return res.status(400).json({ message: 'No file uploaded' });
     }
 
-    const result = await cloudinary.uploader.upload(req.file.path, {
-      folder: 'uploads',
-    });
+    // Upload file directly to Supabase
+    const filePath = req.file.path;
+    const fileName = path.basename(filePath);
+    const fileBuffer = fs.readFileSync(filePath);
+
+    const { data, error } = await supabase.storage
+      .from(process.env.SUPABASE_BUCKET)
+      .upload(`uploads/${Date.now()}-${fileName}`, fileBuffer, {
+        contentType: req.file.mimetype,
+        upsert: false
+      });
+
+    if (error) {
+      console.error(`Upload failed for ${fileName}:`, error.message);
+      return res.status(500).json({ message: 'Upload failed', error: error.message });
+    }
+
+    const publicUrl = `${supabase.supabaseUrl}/storage/v1/object/public/${process.env.SUPABASE_BUCKET}/${data.path}`;
 
     // Delete local file after successful upload
-    fs.unlink(req.file.path, (err) => {
+    fs.unlink(filePath, (err) => {
       if (err) console.error('Error deleting temp file:', err);
     });
 
     res.status(200).json({
       message: 'Image uploaded successfully',
-      url: result.secure_url,
-      public_id: result.public_id,
+      url: publicUrl,
+      public_id: data.path,
     });
   } catch (error) {
     console.error("Error in the uploadImage:", error);
