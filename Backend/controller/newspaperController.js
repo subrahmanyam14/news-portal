@@ -1,27 +1,121 @@
+const express = require('express');
+const multer = require('multer');
+const { PDFDocument } = require('pdf-lib');
+const poppler = require('pdf-poppler');
+const sharp = require('sharp');
 const fs = require('fs');
 const path = require('path');
-const { promisify } = require('util');
+const { promisify } = require('util')
+const cloudinary = require('../cloudinary/config');
+const {NewspaperDetails} = require('../model/NewPaper');
 const supabase = require("../supabase/config");
-const { NewspaperDetails } = require('../model/NewPaper');
-const pdfConverter = require('../utils/pdfConverter'); // Import our new PDF conversion utility
 
 // Promisify file system functions
 const unlink = promisify(fs.unlink);
 const rm = promisify(fs.rm);
 const mkdir = promisify(fs.mkdir);
-const readFile = promisify(fs.readFile);
 
 // Configure temp directories
 const TEMP_DIR = path.join(__dirname, '..', 'temp');
 const PAGES_DIR = path.join(TEMP_DIR, 'pages');
 
-// Upload Images to Supabase
+// Ensure temp directories exist
+const ensureDirsExist = async () => {
+  if (!fs.existsSync(TEMP_DIR)) await mkdir(TEMP_DIR, { recursive: true });
+  if (!fs.existsSync(PAGES_DIR)) await mkdir(PAGES_DIR, { recursive: true });
+};
+
+// Configure multer for PDF uploads
+const storage = multer.diskStorage({
+  destination: async (req, file, cb) => {
+    try {
+      await ensureDirsExist();
+      cb(null, TEMP_DIR);
+    } catch (error) {
+      cb(error);
+    }
+  },
+  filename: (req, file, cb) => {
+    const safeName = file.originalname.replace(/[^a-zA-Z0-9.]/g, '_');
+    cb(null, `upload-${Date.now()}-${safeName}`);
+  }
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 100 * 1024 * 1024 }, // Increased to 100MB
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === 'application/pdf') cb(null, true);
+    else cb(new Error('Only PDF files are allowed'), false);
+  }
+});
+
+// Validate PDF
+const validatePDF = async (pdfPath) => {
+  try {
+    const pdfBytes = fs.readFileSync(pdfPath);
+    const pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
+    const pageCount = pdfDoc.getPageCount();
+    
+    if (pageCount === 0) throw new Error('PDF file has no pages');
+    return pageCount;
+  } catch (error) {
+    console.error('PDF validation error:', error);
+    throw new Error(`Invalid PDF file: ${error.message}`);
+  }
+};
+
+// Convert PDF to Ultra-HD Images
+const convertPDFToImages = async (pdfPath, outputDir) => {
+  try {
+    if (!fs.existsSync(outputDir)) await mkdir(outputDir, { recursive: true });
+
+    const options = {
+      format: 'png', 
+      out_dir: outputDir,
+      out_prefix: 'page',
+      scale: 1200 // MAX DPI for crystal-clear images
+    };
+
+    await poppler.convert(pdfPath, options);
+
+    const imagePaths = fs.readdirSync(outputDir)
+      .filter(file => file.endsWith('.png'))
+      .map(file => path.join(outputDir, file));
+
+    return imagePaths;
+  } catch (error) {
+    console.error('PDF conversion error:', error);
+    throw new Error(`Failed to convert PDF to images: ${error.message}`);
+  }
+};
+
+// Optimize Images WITHOUT Losing Quality
+const optimizeImages = async (imagePaths) => {
+  const optimizedPaths = [];
+
+  for (const imagePath of imagePaths) {
+    const optimizedPath = imagePath.replace('.png', '_optimized.png');
+
+    await sharp(imagePath)
+      .png({ compressionLevel: 0 }) // No compression = 100% quality
+      .toFile(optimizedPath);
+
+    await unlink(imagePath); // Remove original file
+    fs.renameSync(optimizedPath, imagePath); // Rename optimized file
+    optimizedPaths.push(imagePath);
+  }
+
+  return optimizedPaths;
+};
+
+// Upload Images to SupaBase (100% Quality)
 const uploadToSupabase = async (imagePaths) => {
   const urls = [];
 
   for (const imagePath of imagePaths) {
     const fileName = path.basename(imagePath);
-    const fileBuffer = await readFile(imagePath);
+    const fileBuffer = fs.readFileSync(imagePath);
 
     const { data, error } = await supabase.storage
       .from(process.env.SUPABASE_BUCKET)
@@ -30,15 +124,20 @@ const uploadToSupabase = async (imagePaths) => {
         upsert: false
       });
 
-    if (error) throw new Error(`Failed to upload ${fileName}: ${error.message}`);
+    if (error) {
+      console.error(`Upload failed for ${fileName}:`, error.message);
+      throw new Error(`Failed to upload ${fileName}`);
+    }
 
     const publicUrl = `${supabase.supabaseUrl}/storage/v1/object/public/${process.env.SUPABASE_BUCKET}/${data.path}`;
     urls.push(publicUrl);
-    await unlink(imagePath);
+
+    await unlink(imagePath); // Cleanup
   }
 
   return urls;
 };
+
 
 // Controller for Newspaper Upload
 const uploadNewspaper = async (req, res) => {
@@ -51,7 +150,7 @@ const uploadNewspaper = async (req, res) => {
     await rm(PAGES_DIR, { recursive: true, force: true }).catch(() => {});
     await mkdir(PAGES_DIR, { recursive: true });
 
-    pageCount = await pdfConverter.validatePDF(pdfPath);
+    pageCount = await validatePDF(pdfPath);
     console.log(`PDF validated. Contains ${pageCount} pages.`);
 
     let publicationDate = req.body.publicationDate || new Date();
@@ -62,16 +161,17 @@ const uploadNewspaper = async (req, res) => {
     const isPublished = publicationDate <= now;
 
     console.log('Converting PDF to images...');
-    const imagePaths = await pdfConverter.convertPDFToImages(pdfPath, PAGES_DIR);
-    console.log(`Generated ${imagePaths.length} images from PDF`);
+    const imagePaths = await convertPDFToImages(pdfPath, PAGES_DIR);
+    console.log(`Generate
+      d ${imagePaths.length} ultra-HD images from PDF`);
 
     console.log('Optimizing images...');
-    const optimizedImagePaths = await pdfConverter.optimizeImages(imagePaths);
+    const optimizedImagePaths = await optimizeImages(imagePaths);
     console.log(`Optimized ${optimizedImagePaths.length} images successfully`);
 
-    console.log('Uploading images to Supabase...');
+    console.log('Uploading images to Cloudinary...');
     const imageUrls = await uploadToSupabase(optimizedImagePaths);
-    console.log(`Successfully uploaded ${imageUrls.length} images to Supabase`);
+    console.log(`Successfully uploaded ${imageUrls.length} images to Cloudinary`);
 
     const newspaper = new NewspaperDetails({
       newspaperLinks: imageUrls,
@@ -293,12 +393,12 @@ const getNewspapersIncludeFuture = async (req, res) => {
     let query = {};
     if (!includeFuture) {
       query = {
-        isPublished: true,  
-        publicationDate: { $lte: now }  
+        isPublished: true,  // Only include published newspapers
+        publicationDate: { $lte: now }  // Additional safety check
       };
     }
 
-    // Get total count of newspapers
+    // Get total count of newspapers (with or without future ones)
     const totalNewspapers = await NewspaperDetails.countDocuments(query);
     
     const totalPages = Math.ceil(totalNewspapers / limit);
@@ -340,7 +440,6 @@ const getNewspapersIncludeFuture = async (req, res) => {
     });
   }
 };
-
 const deleteNewspaper = async( req, res ) => {
   try {
     const {id} = req.params;
@@ -372,20 +471,9 @@ const uploadImage = async (req, res) => {
       return res.status(400).json({ message: 'No file uploaded' });
     }
 
-    // Upload image to Supabase
-    const fileName = path.basename(req.file.path);
-    const fileBuffer = await readFile(req.file.path);
-
-    const { data, error } = await supabase.storage
-      .from(process.env.SUPABASE_BUCKET)
-      .upload(`uploads/${Date.now()}-${fileName}`, fileBuffer, {
-        contentType: req.file.mimetype,
-        upsert: false
-      });
-
-    if (error) throw new Error(`Failed to upload ${fileName}: ${error.message}`);
-
-    const publicUrl = `${supabase.supabaseUrl}/storage/v1/object/public/${process.env.SUPABASE_BUCKET}/${data.path}`;
+    const result = await cloudinary.uploader.upload(req.file.path, {
+      folder: 'uploads',
+    });
 
     // Delete local file after successful upload
     fs.unlink(req.file.path, (err) => {
@@ -394,8 +482,8 @@ const uploadImage = async (req, res) => {
 
     res.status(200).json({
       message: 'Image uploaded successfully',
-      url: publicUrl,
-      public_id: data.path,
+      url: result.secure_url,
+      public_id: result.public_id,
     });
   } catch (error) {
     console.error("Error in the uploadImage:", error);
@@ -404,7 +492,7 @@ const uploadImage = async (req, res) => {
 };
 
 module.exports = {
-  uploadNewspaper: [pdfConverter.upload.single('pdf'), uploadNewspaper],
+  uploadNewspaper: [upload.single('pdf'), uploadNewspaper],
   getLatestNewspaper,
   getNewspaperByDate,
   getAvailableDates,

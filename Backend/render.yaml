@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: my-newspaper-app
+    env: node
+    buildCommand: yarn
+    startCommand: node server.js
+    envVars:
+      - key: NODE_VERSION
+        value: 16
+    packages:
+      - poppler-utils  # Install the required system dependency
