@@ -1,12 +1,13 @@
 const express = require('express');
 const multer = require('multer');
 const { PDFDocument } = require('pdf-lib');
-const { fromPath } = require('pdf2pic');
 const fs = require('fs');
 const path = require('path');
+const sharp = require('sharp');
 const { promisify } = require('util');
 const supabase = require("../supabase/config");
 const {NewspaperDetails} = require('../model/NewPaper');
+const { exec } = require('child_process');
 
 // Promisify file system functions
 const unlink = promisify(fs.unlink);
@@ -64,40 +65,151 @@ const validatePDF = async (pdfPath) => {
   }
 };
 
-// Convert PDF to Images using pdf2pic
+// Convert PDF to Images using a reliable fallback approach
 const convertPDFToImages = async (pdfPath, outputDir) => {
   try {
     if (!fs.existsSync(outputDir)) await mkdir(outputDir, { recursive: true });
     
+    // Get the page count from the PDF
     const pageCount = await validatePDF(pdfPath);
-    const imagePaths = [];
+    console.log(`PDF has ${pageCount} pages`);
     
-    // Setup pdf2pic options for high quality
-    const options = {
-      density: 300, // Higher DPI for better quality
-      saveFilename: 'page',
-      savePath: outputDir,
-      format: 'png',
-      width: 2480, // A4 size at 300 DPI
-      height: 3508,
-      quality: 100 // Maximum quality
+    // Function to execute a command and return its stdout
+    const execCmd = async (cmd) => {
+      return new Promise((resolve, reject) => {
+        exec(cmd, (error, stdout, stderr) => {
+          if (error) {
+            console.error(`Command execution error: ${error.message}`);
+            console.error(`stderr: ${stderr}`);
+            reject(error);
+            return;
+          }
+          resolve(stdout);
+        });
+      });
     };
     
-    // Initialize pdf2pic converter
-    const convert = fromPath(pdfPath, options);
+    // Try different PDF to image conversion methods
+    const imagePaths = [];
+    const baseName = path.basename(pdfPath, '.pdf');
+    const outputPrefix = path.join(outputDir, 'page');
     
-    // Convert each page
-    for (let i = 1; i <= pageCount; i++) {
-      console.log(`Converting page ${i} of ${pageCount}...`);
-      const result = await convert(i);
+    // Method 1: Try pdftoppm (from poppler-utils)
+    try {
+      console.log('Trying pdftoppm conversion...');
+      await execCmd(`pdftoppm -png -r 300 "${pdfPath}" "${outputPrefix}"`);
       
-      if (result && result.path) {
-        imagePaths.push(result.path);
-      } else {
-        console.warn(`Warning: No path returned for page ${i}`);
+      // Look for generated images
+      const files = fs.readdirSync(outputDir);
+      const pdftoppmImages = files
+        .filter(file => file.startsWith('page-') && file.endsWith('.png'))
+        .map(file => path.join(outputDir, file));
+      
+      if (pdftoppmImages.length > 0) {
+        console.log(`Successfully converted ${pdftoppmImages.length} pages with pdftoppm`);
+        return pdftoppmImages;
+      }
+    } catch (e) {
+      console.log('pdftoppm conversion failed:', e.message);
+    }
+    
+    // Method 2: Try ImageMagick
+    try {
+      console.log('Trying ImageMagick conversion...');
+      await execCmd(`convert -density 300 "${pdfPath}" "${outputPrefix}-%d.png"`);
+      
+      // Look for generated images
+      const files = fs.readdirSync(outputDir);
+      const imageMagickImages = files
+        .filter(file => file.startsWith('page-') && file.endsWith('.png'))
+        .map(file => path.join(outputDir, file));
+      
+      if (imageMagickImages.length > 0) {
+        console.log(`Successfully converted ${imageMagickImages.length} pages with ImageMagick`);
+        return imageMagickImages;
+      }
+    } catch (e) {
+      console.log('ImageMagick conversion failed:', e.message);
+    }
+    
+    // Method 3: Try GhostScript
+    try {
+      console.log('Trying GhostScript conversion...');
+      await execCmd(`gs -dSAFER -dBATCH -dNOPAUSE -sDEVICE=png16m -r300 -dTextAlphaBits=4 -dGraphicsAlphaBits=4 -o "${outputPrefix}-%d.png" "${pdfPath}"`);
+      
+      // Look for generated images
+      const files = fs.readdirSync(outputDir);
+      const ghostScriptImages = files
+        .filter(file => file.startsWith('page-') && file.endsWith('.png'))
+        .map(file => path.join(outputDir, file));
+      
+      if (ghostScriptImages.length > 0) {
+        console.log(`Successfully converted ${ghostScriptImages.length} pages with GhostScript`);
+        return ghostScriptImages;
+      }
+    } catch (e) {
+      console.log('GhostScript conversion failed:', e.message);
+    }
+    
+    // Method 4: Page by page using pdf-lib and any available tool
+    console.log('Trying page-by-page conversion...');
+    const pdfBytes = fs.readFileSync(pdfPath);
+    const pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
+    
+    for (let i = 0; i < pageCount; i++) {
+      console.log(`Converting page ${i + 1} of ${pageCount}...`);
+      
+      // Create a new PDF with just this page
+      const singlePagePdf = await PDFDocument.create();
+      const [copiedPage] = await singlePagePdf.copyPages(pdfDoc, [i]);
+      singlePagePdf.addPage(copiedPage);
+      
+      // Save the single page as a temporary PDF
+      const singlePageBytes = await singlePagePdf.save();
+      const tempPagePath = path.join(outputDir, `temp_page_${i + 1}.pdf`);
+      fs.writeFileSync(tempPagePath, singlePageBytes);
+      
+      // Try converting this single page PDF
+      let converted = false;
+      const outputImagePath = path.join(outputDir, `page_${i + 1}.png`);
+      
+      // Try pdftoppm for this page
+      try {
+        await execCmd(`pdftoppm -png -r 300 -singlefile "${tempPagePath}" "${path.join(outputDir, `page_${i + 1}`)}"`);
+        if (fs.existsSync(outputImagePath)) {
+          imagePaths.push(outputImagePath);
+          converted = true;
+        }
+      } catch (e) {
+        console.log(`pdftoppm failed for page ${i + 1}`);
+      }
+      
+      // Try ImageMagick if pdftoppm failed
+      if (!converted) {
+        try {
+          await execCmd(`convert -density 300 "${tempPagePath}" "${outputImagePath}"`);
+          if (fs.existsSync(outputImagePath)) {
+            imagePaths.push(outputImagePath);
+            converted = true;
+          }
+        } catch (e) {
+          console.log(`ImageMagick failed for page ${i + 1}`);
+        }
+      }
+      
+      // Clean up the temporary PDF
+      await unlink(tempPagePath).catch(() => {});
+      
+      if (!converted) {
+        console.warn(`Could not convert page ${i + 1} with any method`);
       }
     }
     
+    if (imagePaths.length === 0) {
+      throw new Error('No images were generated from the PDF with any method');
+    }
+    
+    console.log(`Successfully converted ${imagePaths.length} out of ${pageCount} pages`);
     return imagePaths;
   } catch (error) {
     console.error('PDF conversion error:', error);
