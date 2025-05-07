@@ -1,0 +1,16 @@
+FROM node:16
+
+# Install poppler-utils for PDF processing
+RUN apt-get update && apt-get install -y poppler-utils
+
+WORKDIR /app
+
+# Copy package.json and install dependencies
+COPY package.json yarn.lock* ./
+RUN yarn install
+
+# Copy all files
+COPY . .
+
+# Start the application
+CMD ["node", "server.js"]
