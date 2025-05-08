@@ -222,7 +222,7 @@ export default function ImageViewer({
         <ChevronLeft size={24} />
       </button>
 
-      <div className="w-full flex justify-center items-center" style={{ height: '100vh' }}>
+      <div className="w-full flex justify-center items-center h-fit md:h-[100vh]">
         {isClipping ? (
           <div className="relative" ref={clipContainerRef}>
             <img
