@@ -358,7 +358,7 @@ export default function ImageViewer({
               startPage={activeImage ? activeImage.id - 1 : 0}
               showCover={false}
               mobileScrollSupport={true}
-              onFlip={handlePageFlip}
+              // onFlip={handlePageFlip}
               className="newspaper-book"
               style={{ backgroundColor: "transparent" }}
               startZIndex={10}
