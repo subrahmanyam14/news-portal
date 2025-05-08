@@ -128,17 +128,15 @@ export default function ZoomModal({ activeImage, onClose }) {
   };
 
   const handleMouseDown = (e) => {
-    if (zoomLevel > 75) {
-      setIsDragging(true);
-      setDragStart({ x: e.clientX, y: e.clientY });
-      if (containerRef.current) {
-        containerRef.current.style.cursor = 'grabbing';
-      }
+    setIsDragging(true);
+    setDragStart({ x: e.clientX, y: e.clientY });
+    if (containerRef.current) {
+      containerRef.current.style.cursor = 'grabbing';
     }
   };
 
   const handleMouseMove = (e) => {
-    if (isDragging && zoomLevel > 75) {
+    if (isDragging) {
       const dx = e.clientX - dragStart.x;
       const dy = e.clientY - dragStart.y;
 
@@ -156,7 +154,7 @@ export default function ZoomModal({ activeImage, onClose }) {
   const handleMouseUp = () => {
     setIsDragging(false);
     if (containerRef.current) {
-      containerRef.current.style.cursor = zoomLevel > 75 ? 'grab' : 'default';
+      containerRef.current.style.cursor = 'grab';
     }
   };
 
@@ -188,7 +186,7 @@ export default function ZoomModal({ activeImage, onClose }) {
   };
 
   const handleTouchMove = (e) => {
-    if (e.touches.length === 1 && isDragging && zoomLevel > 75) {
+    if (e.touches.length === 1 && isDragging) {
       e.preventDefault();
       const dx = e.touches[0].clientX - dragStart.x;
       const dy = e.touches[0].clientY - dragStart.y;
@@ -253,7 +251,10 @@ export default function ZoomModal({ activeImage, onClose }) {
 
   useEffect(() => {
     setIsZoomedIn(zoomLevel > 75);
-  }, [zoomLevel]);
+    if (containerRef.current) {
+      containerRef.current.style.cursor = isDragging ? 'grabbing' : 'grab';
+    }
+  }, [zoomLevel, isDragging]);
 
   if (!activeImage) return null;
 
@@ -315,7 +316,7 @@ export default function ZoomModal({ activeImage, onClose }) {
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
           style={{
-            cursor: zoomLevel > 75 ? (isDragging ? 'grabbing' : 'grab') : 'default'
+            cursor: isDragging ? 'grabbing' : 'grab'
           }}
         >
           <div
