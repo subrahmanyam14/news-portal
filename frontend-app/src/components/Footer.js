@@ -1,15 +1,52 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 
 const Footer = () => {
+  const [logoUrl, setLogoUrl] = useState(null);
+  const [isLogoLoading, setIsLogoLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchLogo = async () => {
+      try {
+        const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}/logo`);
+
+        // Check if the response is valid and has data
+        if (response.status === 200 && response.data.success) {
+          setLogoUrl(response.data.data.url);
+        }
+      } catch (error) {
+        console.error('Failed to fetch logo:', error);
+        // No action needed as we'll display text if logo isn't available
+      } finally {
+        setIsLogoLoading(false);
+      }
+    };
+
+    fetchLogo();
+  }, []);
+
   return (
     <footer className="bg-[#212529] text-white py-6 border-t border-[#403fbb]">
       <div className="container mx-auto px-4">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div>
-            <h3 className="text-xl font-bold mb-4">
-              <span className="text-[#403fbb]">E-</span> 
-              <span className="text-white">Paper</span>
-            </h3>
+            <div className="flex items-center mb-4">
+              {isLogoLoading ? (
+                <div className="h-8 w-32 bg-gray-700 animate-pulse rounded"></div>
+              ) : logoUrl ? (
+                <img 
+                  src={logoUrl} 
+                  alt="E-Paper Logo" 
+                  className="h-12 object-contain" 
+                  onError={() => setLogoUrl(null)} // Fallback if image fails to load
+                />
+              ) : (
+                <h3 className="text-xl font-bold">
+                  <span className="text-[#403fbb]">E-</span> 
+                  <span className="text-white">Paper</span>
+                </h3>
+              )}
+            </div>
             <p className="text-gray-400 text-sm">
               A Portrait of Telangana People's Life
             </p>

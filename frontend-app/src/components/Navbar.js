@@ -22,9 +22,9 @@ const Navbar = () => {
 
   // Default links in case API fails
   const defaultLinks = [
-    { name: 'About Us', path: '/about', icon: <Info className="w-4 h-4 mr-1" /> },
-    { name: 'Security', path: '/security', icon: <Shield className="w-4 h-4 mr-1" /> },
-    { name: 'Help', path: '/help', icon: <HelpCircle className="w-4 h-4 mr-1" /> }
+    { name: 'About Us', path: 'https://example.com/about', icon: <Info className="w-4 h-4 mr-1" />, isExternal: true },
+    { name: 'Security', path: 'https://example.com/security', icon: <Shield className="w-4 h-4 mr-1" />, isExternal: true },
+    { name: 'Help', path: 'https://example.com/help', icon: <HelpCircle className="w-4 h-4 mr-1" />, isExternal: true }
   ];
 
   // Check user role when login status changes
@@ -71,12 +71,13 @@ const Navbar = () => {
       try {
         const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}/navlink/get`);
 
-        // Transform API response to match our expected format
+        // Transform API response to match our expected format and mark as external
         const transformedLinks = response.data.map(link => ({
           name: link.name,
           path: link.path,
           _id: link._id,
-          icon: getIconForPath(link.path)
+          icon: getIconForPath(link.path),
+          isExternal: true // Mark all API-fetched links as external
         }));
 
         setLinks(transformedLinks);
@@ -90,30 +91,35 @@ const Navbar = () => {
 
     // Helper function to assign icons based on path
     const getIconForPath = (path) => {
-      switch (path) {
-        case '/about':
-          return <Info className="w-4 h-4 mr-1" />;
-        case '/security':
-          return <Shield className="w-4 h-4 mr-1" />;
-        case '/help':
-          return <HelpCircle className="w-4 h-4 mr-1" />;
-        default:
-          return <Info className="w-4 h-4 mr-1" />;
+      if (path.includes('about')) {
+        return <Info className="w-4 h-4 mr-1" />;
+      } else if (path.includes('security')) {
+        return <Shield className="w-4 h-4 mr-1" />;
+      } else if (path.includes('help')) {
+        return <HelpCircle className="w-4 h-4 mr-1" />;
+      } else {
+        return <Info className="w-4 h-4 mr-1" />;
       }
     };
 
     fetchLinks();
   }, []);
 
-  const handleNavigation = (path) => {
-    navigate(path);
+  const handleNavigation = (path, isExternal) => {
+    if (isExternal) {
+      // Open external links in new tab
+      window.open(path, '_blank', 'noopener,noreferrer');
+    } else {
+      // Use react-router for internal navigation
+      navigate(path);
+    }
     setIsMobileMenuOpen(false);
   };
 
-  const handleLogin = () => handleNavigation('/login');
-  const handleDashboard = () => handleNavigation('/dashboard');
-  const handleSuperAdmin = () => handleNavigation('/super-admin');
-  const handleHome = () => handleNavigation('/');
+  const handleLogin = () => navigate('/login');
+  const handleDashboard = () => navigate('/dashboard');
+  const handleSuperAdmin = () => navigate('/super-admin');
+  const handleHome = () => navigate('/');
 
   const handleLogout = () => {
     // Use the logout function from context
@@ -295,8 +301,8 @@ const Navbar = () => {
           {/* Additional Links */}
           {displayLinks.map((link) => (
             <button
-              key={link._id || link.path}  // Use _id if available, otherwise fallback to path
-              onClick={() => handleNavigation(link.path)}
+              key={link._id || link.path}
+              onClick={() => handleNavigation(link.path, link.isExternal)}
               className="flex items-center px-3 py-1 text-white hover:text-gray-200 transition-colors"
             >
               {link.icon}
@@ -358,7 +364,7 @@ const Navbar = () => {
           {displayLinks.map((link) => (
             <button
               key={link._id || link.path}
-              onClick={() => handleNavigation(link.path)}
+              onClick={() => handleNavigation(link.path, link.isExternal)}
               className="flex items-center justify-center px-3 py-2 text-white hover:text-gray-200 transition-colors"
             >
               {link.icon}
