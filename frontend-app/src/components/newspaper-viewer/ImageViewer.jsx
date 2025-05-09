@@ -168,43 +168,59 @@ export default function ImageViewer({
     }
   };
 
+  // In ImageViewer.jsx - Update handleNextClick function
   const handleNextClick = () => {
-    if (bookRef.current && bookRef.current.pageFlip && !isFlipping && !isClipping) {
-      try {
-        const pageFlip = bookRef.current.pageFlip();
-        if (pageFlip && typeof pageFlip.flipNext === 'function') {
-          pageFlip.flipNext();
+    if (!isFlipping && !isClipping) {
+      // Manually trigger the animation through the parent component
+      onNextImage();
+
+      // Use the PageFlip API to trigger the visual animation
+      if (bookRef.current && bookRef.current.pageFlip) {
+        try {
+          const pageFlip = bookRef.current.pageFlip();
+          if (pageFlip && typeof pageFlip.flipNext === 'function') {
+            pageFlip.flipNext();
+          }
+        } catch (error) {
+          console.log("Could not flip next", error);
         }
-      } catch (error) {
-        console.log("Could not flip next", error);
       }
     }
-    onNextImage();
   };
 
+  // In ImageViewer.jsx - Update handlePrevClick function
   const handlePrevClick = () => {
-    if (bookRef.current && bookRef.current.pageFlip && !isFlipping && !isClipping) {
-      try {
-        const pageFlip = bookRef.current.pageFlip();
-        if (pageFlip && typeof pageFlip.flipPrev === 'function') {
-          pageFlip.flipPrev();
+    if (!isFlipping && !isClipping) {
+      // Manually trigger the animation through the parent component
+      onPrevImage();
+
+      // Use the PageFlip API to trigger the visual animation
+      if (bookRef.current && bookRef.current.pageFlip) {
+        try {
+          const pageFlip = bookRef.current.pageFlip();
+          if (pageFlip && typeof pageFlip.flipPrev === 'function') {
+            pageFlip.flipPrev();
+          }
+        } catch (error) {
+          console.log("Could not flip prev", error);
         }
-      } catch (error) {
-        console.log("Could not flip prev", error);
       }
     }
-    onPrevImage();
   };
 
   const renderPages = () => {
     return images.map((image, index) => (
       <div key={index} className="page">
-        <div className="page-content">
+        <div className="page-content w-full h-full flex items-center justify-center">
           <img
             src={image.src}
             alt={`Page ${image.id}`}
-            className="shadow-lg border-2 border-gray-400 cursor-zoom-in max-h-[70vh] w-auto object-contain"
-            onClick={onZoomClick}
+            className="w-full h-full object-contain cursor-zoom-in"
+            onClick={(e) => {
+              e.stopPropagation(); // Stop event bubbling
+              onZoomClick(image); // Pass the specific image to zoom
+            }}
+            style={{ maxHeight: '100%' }}
           />
         </div>
       </div>
@@ -222,7 +238,7 @@ export default function ImageViewer({
         <ChevronLeft size={24} />
       </button>
 
-      <div className="w-full flex justify-center items-center h-fit md:h-[100vh]">
+      <div className="w-full flex justify-center items-center">
         {isClipping ? (
           <div className="relative" ref={clipContainerRef}>
             <img
@@ -342,31 +358,30 @@ export default function ImageViewer({
             </div>
           </div>
         ) : (
-          <div className="flip-book-container">
+          <div className="flip-book-container w-full h-full">
             <HTMLFlipBook
               ref={bookRef}
-              width={600}
-              height={800}
+              width={window.innerWidth}
+              height={(window.innerWidth * 16) / 9}
               size="stretch"
-              minWidth={400}
-              maxWidth={1000}
-              minHeight={500}
-              maxHeight={1000}
+              minWidth={window.innerWidth}
+              maxWidth={window.innerWidth}
+              minHeight={400}
+              maxHeight={window.innerHeight * 0.8}
               drawShadow={true}
               flippingTime={1000}
               usePortrait={true}
               startPage={activeImage ? activeImage.id - 1 : 0}
               showCover={false}
               mobileScrollSupport={true}
-              // onFlip={handlePageFlip}
+              onFlip={handlePageFlip}
               className="newspaper-book"
               style={{ backgroundColor: "transparent" }}
               startZIndex={10}
               autoSize={true}
               maxShadowOpacity={0.5}
               showPageCorners={true}
-              disableTouch={true}
-              disableFlipByClick={true}
+              disableFlipByClick={true}  // <- Change to true to disable clicking to flip
             >
               {renderPages()}
             </HTMLFlipBook>
@@ -456,12 +471,6 @@ export default function ImageViewer({
             height: auto;
             object-fit: contain;
           }
-          
-          .flip-book-container {
-            width: 100% !important;
-            padding: 0 !important;
-          }
-          
           .page-content img {
             touch-action: none !important;
           }

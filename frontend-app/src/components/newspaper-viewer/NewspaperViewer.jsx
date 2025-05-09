@@ -14,54 +14,54 @@ import YoutubeVideo from "./YoutubeVideo";
 
 // Sample data to use as fallback
 const SAMPLE_DATA = {
-  headlines: [
-    {
-      "name": "Latest Updates",
-      "path": "/latest",
-      "_id": "680fc6be9a73cb9c85003354"
-    },
-    {
-      "name": "Featured",
-      "path": "/featured",
-      "_id": "680fc6be9a73cb9c85003355"
-    }
-  ],
-  navigationLinks: [
-    {
-      "name": "Security",
-      "path": "/security",
-      "_id": "67f240c2cf2918abb88da5ff"
-    },
-    {
-      "name": "About Us",
-      "path": "/about",
-      "_id": "67fa0d028c4eef948264a768"
-    }
-  ],
-  newspaper: {
-    "success": true,
-    "data": {
-      "_id": "681080c6a5d79a4fb0cc78a3",
-      "newspaperLinks": [
-        "https://res.cloudinary.com/dlkllp35e/image/upload/v1745911974/newspapers/s3ayxf0twvzeldvlpkwe.png",
-        "https://res.cloudinary.com/dlkllp35e/image/upload/v1745911978/newspapers/yloxfwac1dntqkyrj7ew.png",
-        "https://res.cloudinary.com/dlkllp35e/image/upload/v1745911982/newspapers/eqwbe4kfnkwtmn6rrf1v.png",
-        "https://res.cloudinary.com/dlkllp35e/image/upload/v1745911986/newspapers/nypjtkmhrptwyrmbqijn.png",
-        "https://res.cloudinary.com/dlkllp35e/image/upload/v1745911991/newspapers/n4284xkc3qnrvjah0xag.png",
-        "https://res.cloudinary.com/dlkllp35e/image/upload/v1745911996/newspapers/rfxid9tsefyoiw8kjlhh.png",
-        "https://res.cloudinary.com/dlkllp35e/image/upload/v1745912000/newspapers/sh7icjg4pu7z5qvdwypd.png",
-        "https://res.cloudinary.com/dlkllp35e/image/upload/v1745912005/newspapers/rqsybsmvxwfh7o1l00vf.png"
-      ],
-      "totalpages": 8,
-      "publicationDate": "2025-04-29T06:46:55.856Z",
-      "originalFilename": "flexbox.pdf",
-      "isPublished": true,
-      "youtubeLink": "https://youtu.be/d0Anl3tIKaA?si=Ai64A6dhxOMbJe5V",
-      "createdAt": "2025-04-29T07:33:26.211Z",
-      "updatedAt": "2025-04-29T07:33:26.211Z",
-      "__v": 0
-    }
-  }
+	headlines: [
+		{
+			"name": "Latest Updates",
+			"path": "/latest",
+			"_id": "680fc6be9a73cb9c85003354"
+		},
+		{
+			"name": "Featured",
+			"path": "/featured",
+			"_id": "680fc6be9a73cb9c85003355"
+		}
+	],
+	navigationLinks: [
+		{
+			"name": "Security",
+			"path": "/security",
+			"_id": "67f240c2cf2918abb88da5ff"
+		},
+		{
+			"name": "About Us",
+			"path": "/about",
+			"_id": "67fa0d028c4eef948264a768"
+		}
+	],
+	newspaper: {
+		"success": true,
+		"data": {
+			"_id": "681080c6a5d79a4fb0cc78a3",
+			"newspaperLinks": [
+				"https://res.cloudinary.com/dlkllp35e/image/upload/v1745911974/newspapers/s3ayxf0twvzeldvlpkwe.png",
+				"https://res.cloudinary.com/dlkllp35e/image/upload/v1745911978/newspapers/yloxfwac1dntqkyrj7ew.png",
+				"https://res.cloudinary.com/dlkllp35e/image/upload/v1745911982/newspapers/eqwbe4kfnkwtmn6rrf1v.png",
+				"https://res.cloudinary.com/dlkllp35e/image/upload/v1745911986/newspapers/nypjtkmhrptwyrmbqijn.png",
+				"https://res.cloudinary.com/dlkllp35e/image/upload/v1745911991/newspapers/n4284xkc3qnrvjah0xag.png",
+				"https://res.cloudinary.com/dlkllp35e/image/upload/v1745911996/newspapers/rfxid9tsefyoiw8kjlhh.png",
+				"https://res.cloudinary.com/dlkllp35e/image/upload/v1745912000/newspapers/sh7icjg4pu7z5qvdwypd.png",
+				"https://res.cloudinary.com/dlkllp35e/image/upload/v1745912005/newspapers/rqsybsmvxwfh7o1l00vf.png"
+			],
+			"totalpages": 8,
+			"publicationDate": "2025-04-29T06:46:55.856Z",
+			"originalFilename": "flexbox.pdf",
+			"isPublished": true,
+			"youtubeLink": "https://youtu.be/d0Anl3tIKaA?si=Ai64A6dhxOMbJe5V",
+			"createdAt": "2025-04-29T07:33:26.211Z",
+			"updatedAt": "2025-04-29T07:33:26.211Z",
+			"__v": 0
+		}
+	}
 };
 
 export default function NewspaperViewer() {
@@ -87,6 +87,7 @@ export default function NewspaperViewer() {
 	const [availableDates, setAvailableDates] = useState([]);
 	const clipContainerRef = useRef(null);
 	const [youtubeLink, setYoutubeLink] = useState(null);
+	const [zoomedImage, setZoomedImage] = useState(null);
 
 	// Helper function to format date as YYYY-MM-DD
 	const formatDate = (date) => {
@@ -149,7 +150,7 @@ export default function NewspaperViewer() {
 				}
 
 				const response = await axios.get(url);
-				
+
 				// Check if response has valid data
 				if (response.data && response.data.data && response.data.data.newspaperLinks) {
 					const links = response.data.data.newspaperLinks.map((src, index) => ({
@@ -157,7 +158,7 @@ export default function NewspaperViewer() {
 						src,
 						date: selectedDate
 					}));
-					setYoutubeLink(response.data.data.youtubeLink || null);				
+					setYoutubeLink(response.data.data.youtubeLink || null);
 					setImages(links);
 					setActiveImage(links[0] || null);
 				} else {
@@ -165,7 +166,7 @@ export default function NewspaperViewer() {
 				}
 			} catch (err) {
 				console.error("Error fetching newspaper:", err);
-				
+
 				// Show sample data with a warning message
 				const sampleLinks = SAMPLE_DATA.newspaper.data.newspaperLinks.map((src, index) => ({
 					id: index + 1,
@@ -253,6 +254,7 @@ export default function NewspaperViewer() {
 		}
 	};
 
+	// In NewspaperViewer.jsx - Update nextImage function
 	const nextImage = () => {
 		if (!activeImage || !images.length || isFlipping) return;
 		const nextImg = images[(activeImage.id % images.length)];
@@ -262,14 +264,16 @@ export default function NewspaperViewer() {
 		setNextImageToShow(nextImg);
 		setIsFlipping(true);
 
+		// Increase the timeout to ensure the animation has time to complete
 		setTimeout(() => {
 			setNoTransition(true);
 			setIsFlipping(false);
 			setActiveImage(nextImg);
 			setTimeout(() => setNoTransition(false), 50);
-		}, 600);
+		}, 1000); // Match this to the flippingTime in HTMLFlipBook
 	};
 
+	// In NewspaperViewer.jsx - Update prevImage function similarly
 	const prevImage = () => {
 		if (!activeImage || !images.length || isFlipping) return;
 		const prevImg = images[(activeImage.id - 2 + images.length) % images.length];
@@ -284,7 +288,7 @@ export default function NewspaperViewer() {
 			setIsFlipping(false);
 			setActiveImage(prevImg);
 			setTimeout(() => setNoTransition(false), 50);
-		}, 600);
+		}, 1000); // Match this to the flippingTime in HTMLFlipBook
 	};
 
 	const goToPage = (pageNum) => {
@@ -370,7 +374,7 @@ export default function NewspaperViewer() {
 		// Get the position from mouse or touch event
 		const clientX = e.clientX || (e.touches && e.touches[0] ? e.touches[0].clientX : null);
 		const clientY = e.clientY || (e.touches && e.touches[0] ? e.touches[0].clientY : null);
-		
+
 		if (clientX === null || clientY === null) return;
 
 		const dx = clientX - clipBoxDragStart.x;
@@ -438,9 +442,9 @@ export default function NewspaperViewer() {
 		}
 
 		// Update the starting position for the next movement
-		setClipBoxDragStart({ 
-			x: clientX, 
-			y: clientY 
+		setClipBoxDragStart({
+			x: clientX,
+			y: clientY
 		});
 	};
 
@@ -455,9 +459,9 @@ export default function NewspaperViewer() {
 		e.stopPropagation();
 		if (e.touches && e.touches[0]) {
 			setMovingClipBox(true);
-			setClipBoxDragStart({ 
-				x: e.touches[0].clientX, 
-				y: e.touches[0].clientY 
+			setClipBoxDragStart({
+				x: e.touches[0].clientX,
+				y: e.touches[0].clientY
 			});
 		}
 	};
@@ -465,24 +469,24 @@ export default function NewspaperViewer() {
 	const handleTouchMove = (e) => {
 		if (!movingClipBox) return;
 		e.preventDefault();
-		
+
 		if (e.touches && e.touches[0]) {
 			const touchX = e.touches[0].clientX;
 			const touchY = e.touches[0].clientY;
-			
+
 			const dx = touchX - clipBoxDragStart.x;
 			const dy = touchY - clipBoxDragStart.y;
-			
+
 			// Only moving, not resizing on touch
 			setClipBox(prev => ({
 				...prev,
 				x: Math.max(0, prev.x + dx),
 				y: Math.max(0, prev.y + dy)
 			}));
-			
-			setClipBoxDragStart({ 
-				x: touchX, 
-				y: touchY 
+
+			setClipBoxDragStart({
+				x: touchX,
+				y: touchY
 			});
 		}
 	};
@@ -495,13 +499,13 @@ export default function NewspaperViewer() {
 		try {
 			const formData = new FormData();
 			formData.append('image', blob, `newspaper-clip-${selectedDate}.jpg`);
-			
+
 			try {
 				const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/newspaper/upload`, {
 					method: 'POST',
 					body: formData
 				});
-				
+
 				if (!response.ok) throw new Error(`Upload failed with status: ${response.status}`);
 				const data = await response.json();
 				return data.url;
@@ -618,7 +622,7 @@ export default function NewspaperViewer() {
 			// Mouse events
 			window.addEventListener('mousemove', handleClipBoxMove);
 			window.addEventListener('mouseup', handleClipBoxRelease);
-			
+
 			// Touch events
 			window.addEventListener('touchmove', handleTouchMove, { passive: false });
 			window.addEventListener('touchend', handleTouchEnd);
@@ -627,7 +631,7 @@ export default function NewspaperViewer() {
 				// Remove mouse events
 				window.removeEventListener('mousemove', handleClipBoxMove);
 				window.removeEventListener('mouseup', handleClipBoxRelease);
-				
+
 				// Remove touch events
 				window.removeEventListener('touchmove', handleTouchMove);
 				window.removeEventListener('touchend', handleTouchEnd);
@@ -678,7 +682,7 @@ export default function NewspaperViewer() {
 			</nav>
 
 			{/* Main Content */}
-			<div className="flex flex-1 flex-col gap-6 overflow-hidden justify-center md:px-32">
+			<div className="flex flex-1 flex-col gap-6 overflow-hidden justify-center">
 				{loading ? (
 					<div className="flex flex-col items-center justify-center h-full">
 						<div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
@@ -700,7 +704,14 @@ export default function NewspaperViewer() {
 							onPrevImage={prevImage}
 							onNextImage={nextImage}
 							images={images}
-							onZoomClick={() => setIsZoomed(true)}
+							onZoomClick={(image) => {
+								setIsZoomed(true);
+								// If an image is explicitly passed, use that one
+								if (image) {
+									// Store the zoomed image separately from active/next images
+									setZoomedImage(image);
+								}
+							}}
 							clipBox={clipBox}
 							onMoveStart={handleMoveStart}
 							onTouchMoveStart={handleTouchMoveStart}
@@ -725,8 +736,8 @@ export default function NewspaperViewer() {
 							onPageChange={goToPage}
 							isClipping={isClipping}
 						/>
-						
-						{youtubeLink && <YoutubeVideo link={youtubeLink}/>}
+
+						{youtubeLink && <YoutubeVideo link={youtubeLink} />}
 					</div>
 				) : !activeImage ? (
 					<div className="text-center p-8 text-gray-500">
@@ -745,7 +756,14 @@ export default function NewspaperViewer() {
 							onPrevImage={prevImage}
 							onNextImage={nextImage}
 							images={images}
-							onZoomClick={() => setIsZoomed(true)}
+							onZoomClick={(image) => {
+								setIsZoomed(true);
+								// If an image is explicitly passed, use that one
+								if (image) {
+									// Store the zoomed image separately from active/next images
+									setZoomedImage(image);
+								}
+							}}
 							clipBox={clipBox}
 							onMoveStart={handleMoveStart}
 							onTouchMoveStart={handleTouchMoveStart}
@@ -770,16 +788,19 @@ export default function NewspaperViewer() {
 							onPageChange={goToPage}
 							isClipping={isClipping}
 						/>
-						
-						{youtubeLink && <YoutubeVideo link={youtubeLink}/>}
+
+						{youtubeLink && <YoutubeVideo link={youtubeLink} />}
 					</>
 				)}
 			</div>
 
 			{isZoomed && activeImage && (
 				<ZoomModal
-					activeImage={activeImage}
-					onClose={() => setIsZoomed(false)}
+					activeImage={zoomedImage || activeImage}
+					onClose={() => {
+						setIsZoomed(false);
+						setZoomedImage(null);
+					}}
 				/>
 			)}
 		</div>
