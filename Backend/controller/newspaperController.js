@@ -3,7 +3,6 @@ const multer = require('multer');
 const { PDFDocument } = require('pdf-lib');
 const fs = require('fs');
 const path = require('path');
-const sharp = require('sharp');
 const { promisify } = require('util');
 const supabase = require("../supabase/config");
 const {NewspaperDetails} = require('../model/NewPaper');
@@ -65,7 +64,22 @@ const validatePDF = async (pdfPath) => {
   }
 };
 
-// Convert PDF to Images using a reliable fallback approach
+// Function to execute a command and return its stdout
+const execCmd = async (cmd) => {
+  return new Promise((resolve, reject) => {
+    exec(cmd, (error, stdout, stderr) => {
+      if (error) {
+        console.error(`Command execution error: ${error.message}`);
+        console.error(`stderr: ${stderr}`);
+        reject(error);
+        return;
+      }
+      resolve(stdout);
+    });
+  });
+};
+
+// Optimized PDF to Images conversion
 const convertPDFToImages = async (pdfPath, outputDir) => {
   try {
     if (!fs.existsSync(outputDir)) await mkdir(outputDir, { recursive: true });
@@ -74,175 +88,162 @@ const convertPDFToImages = async (pdfPath, outputDir) => {
     const pageCount = await validatePDF(pdfPath);
     console.log(`PDF has ${pageCount} pages`);
     
-    // Function to execute a command and return its stdout
-    const execCmd = async (cmd) => {
-      return new Promise((resolve, reject) => {
-        exec(cmd, (error, stdout, stderr) => {
-          if (error) {
-            console.error(`Command execution error: ${error.message}`);
-            console.error(`stderr: ${stderr}`);
-            reject(error);
-            return;
-          }
-          resolve(stdout);
-        });
-      });
-    };
-    
-    // Try different PDF to image conversion methods
-    const imagePaths = [];
-    const baseName = path.basename(pdfPath, '.pdf');
+    // Use pdftoppm with parallel processing
+    console.log('Converting PDF to images with optimized settings...');
     const outputPrefix = path.join(outputDir, 'page');
     
+    // First, determine optimal DPI setting based on page count
+    // Use 150 DPI for standard quality but faster conversion
+    const dpi = 150;
+    
+    // Use pdftoppm with optimized settings for speed
+    // -r sets resolution (DPI)
+    // -jpeg uses JPEG format which is faster to process than PNG
+    // -jpegopt quality=85 provides good quality with faster processing
+    // -l and -f parameters to process pages in parallel batches
+    const batchSize = Math.min(pageCount, 4); // Process up to 4 pages at once
+    const batches = [];
+    
+    for (let i = 0; i < pageCount; i += batchSize) {
+      const startPage = i + 1;
+      const endPage = Math.min(startPage + batchSize - 1, pageCount);
+      
+      // Create a batch for these pages
+      batches.push({
+        start: startPage,
+        end: endPage,
+        cmd: `pdftoppm -jpeg -jpegopt quality=85 -r ${dpi} -f ${startPage} -l ${endPage} "${pdfPath}" "${outputPrefix}"`
+      });
+    }
+    
+    // Run conversion batches in parallel
+    await Promise.all(batches.map(batch => 
+      execCmd(batch.cmd)
+        .then(() => console.log(`Converted pages ${batch.start}-${batch.end}`))
+        .catch(err => console.error(`Error converting pages ${batch.start}-${batch.end}:`, err))
+    ));
+    
+    // Look for generated images
+    const files = await readdir(outputDir);
+    const generatedImages = files
+      .filter(file => file.startsWith('page-') && (file.endsWith('.jpg') || file.endsWith('.jpeg')))
+      .sort((a, b) => {
+        // Sort by page number for correct ordering
+        const numA = parseInt(a.match(/\d+/g)[0]);
+        const numB = parseInt(b.match(/\d+/g)[0]);
+        return numA - numB;
+      })
+      .map(file => path.join(outputDir, file));
+    
+    if (generatedImages.length === 0) {
+      // Fallback to the original method if no images were generated
+      console.log('Fast conversion failed, falling back to standard method...');
+      // Use the original method as fallback
+      return await convertPDFToImagesFallback(pdfPath, outputDir);
+    }
+    
+    console.log(`Successfully converted ${generatedImages.length} pages with optimized pdftoppm`);
+    return generatedImages;
+  } catch (error) {
+    console.error('Optimized PDF conversion error:', error);
+    console.log('Falling back to standard conversion method...');
+    // Use the original method as fallback
+    return await convertPDFToImagesFallback(pdfPath, outputDir);
+  }
+};
+
+// Original fallback method for PDF to image conversion
+const convertPDFToImagesFallback = async (pdfPath, outputDir) => {
+  try {
     // Method 1: Try pdftoppm (from poppler-utils)
-    try {
-      console.log('Trying pdftoppm conversion...');
-      await execCmd(`pdftoppm -png -r 300 "${pdfPath}" "${outputPrefix}"`);
-      
-      // Look for generated images
-      const files = fs.readdirSync(outputDir);
-      const pdftoppmImages = files
-        .filter(file => file.startsWith('page-') && file.endsWith('.png'))
-        .map(file => path.join(outputDir, file));
-      
-      if (pdftoppmImages.length > 0) {
-        console.log(`Successfully converted ${pdftoppmImages.length} pages with pdftoppm`);
-        return pdftoppmImages;
-      }
-    } catch (e) {
-      console.log('pdftoppm conversion failed:', e.message);
+    console.log('Trying standard pdftoppm conversion...');
+    await execCmd(`pdftoppm -png -r 300 "${pdfPath}" "${path.join(outputDir, 'page')}"`);
+    
+    // Look for generated images
+    const files = fs.readdirSync(outputDir);
+    const pdftoppmImages = files
+      .filter(file => file.startsWith('page-') && file.endsWith('.png'))
+      .map(file => path.join(outputDir, file));
+    
+    if (pdftoppmImages.length > 0) {
+      console.log(`Successfully converted ${pdftoppmImages.length} pages with standard pdftoppm`);
+      return pdftoppmImages;
     }
     
     // Method 2: Try ImageMagick
-    try {
-      console.log('Trying ImageMagick conversion...');
-      await execCmd(`convert -density 300 "${pdfPath}" "${outputPrefix}-%d.png"`);
-      
-      // Look for generated images
-      const files = fs.readdirSync(outputDir);
-      const imageMagickImages = files
-        .filter(file => file.startsWith('page-') && file.endsWith('.png'))
-        .map(file => path.join(outputDir, file));
-      
-      if (imageMagickImages.length > 0) {
-        console.log(`Successfully converted ${imageMagickImages.length} pages with ImageMagick`);
-        return imageMagickImages;
-      }
-    } catch (e) {
-      console.log('ImageMagick conversion failed:', e.message);
+    console.log('Trying ImageMagick conversion...');
+    await execCmd(`convert -density 300 "${pdfPath}" "${path.join(outputDir, 'page')}-%d.png"`);
+    
+    // Look for generated images
+    const imageMagickImages = files
+      .filter(file => file.startsWith('page-') && file.endsWith('.png'))
+      .map(file => path.join(outputDir, file));
+    
+    if (imageMagickImages.length > 0) {
+      console.log(`Successfully converted ${imageMagickImages.length} pages with ImageMagick`);
+      return imageMagickImages;
     }
     
     // Method 3: Try GhostScript
-    try {
-      console.log('Trying GhostScript conversion...');
-      await execCmd(`gs -dSAFER -dBATCH -dNOPAUSE -sDEVICE=png16m -r300 -dTextAlphaBits=4 -dGraphicsAlphaBits=4 -o "${outputPrefix}-%d.png" "${pdfPath}"`);
-      
-      // Look for generated images
-      const files = fs.readdirSync(outputDir);
-      const ghostScriptImages = files
-        .filter(file => file.startsWith('page-') && file.endsWith('.png'))
-        .map(file => path.join(outputDir, file));
-      
-      if (ghostScriptImages.length > 0) {
-        console.log(`Successfully converted ${ghostScriptImages.length} pages with GhostScript`);
-        return ghostScriptImages;
-      }
-    } catch (e) {
-      console.log('GhostScript conversion failed:', e.message);
+    console.log('Trying GhostScript conversion...');
+    await execCmd(`gs -dSAFER -dBATCH -dNOPAUSE -sDEVICE=png16m -r300 -dTextAlphaBits=4 -dGraphicsAlphaBits=4 -o "${path.join(outputDir, 'page')}-%d.png" "${pdfPath}"`);
+    
+    // Look for generated images
+    const ghostScriptImages = files
+      .filter(file => file.startsWith('page-') && file.endsWith('.png'))
+      .map(file => path.join(outputDir, file));
+    
+    if (ghostScriptImages.length > 0) {
+      console.log(`Successfully converted ${ghostScriptImages.length} pages with GhostScript`);
+      return ghostScriptImages;
     }
     
-    // Method 4: Page by page using pdf-lib and any available tool
-    console.log('Trying page-by-page conversion...');
-    const pdfBytes = fs.readFileSync(pdfPath);
-    const pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
-    
-    for (let i = 0; i < pageCount; i++) {
-      console.log(`Converting page ${i + 1} of ${pageCount}...`);
-      
-      // Create a new PDF with just this page
-      const singlePagePdf = await PDFDocument.create();
-      const [copiedPage] = await singlePagePdf.copyPages(pdfDoc, [i]);
-      singlePagePdf.addPage(copiedPage);
-      
-      // Save the single page as a temporary PDF
-      const singlePageBytes = await singlePagePdf.save();
-      const tempPagePath = path.join(outputDir, `temp_page_${i + 1}.pdf`);
-      fs.writeFileSync(tempPagePath, singlePageBytes);
-      
-      // Try converting this single page PDF
-      let converted = false;
-      const outputImagePath = path.join(outputDir, `page_${i + 1}.png`);
-      
-      // Try pdftoppm for this page
-      try {
-        await execCmd(`pdftoppm -png -r 300 -singlefile "${tempPagePath}" "${path.join(outputDir, `page_${i + 1}`)}"`);
-        if (fs.existsSync(outputImagePath)) {
-          imagePaths.push(outputImagePath);
-          converted = true;
-        }
-      } catch (e) {
-        console.log(`pdftoppm failed for page ${i + 1}`);
-      }
-      
-      // Try ImageMagick if pdftoppm failed
-      if (!converted) {
-        try {
-          await execCmd(`convert -density 300 "${tempPagePath}" "${outputImagePath}"`);
-          if (fs.existsSync(outputImagePath)) {
-            imagePaths.push(outputImagePath);
-            converted = true;
-          }
-        } catch (e) {
-          console.log(`ImageMagick failed for page ${i + 1}`);
-        }
-      }
-      
-      // Clean up the temporary PDF
-      await unlink(tempPagePath).catch(() => {});
-      
-      if (!converted) {
-        console.warn(`Could not convert page ${i + 1} with any method`);
-      }
-    }
-    
-    if (imagePaths.length === 0) {
-      throw new Error('No images were generated from the PDF with any method');
-    }
-    
-    console.log(`Successfully converted ${imagePaths.length} out of ${pageCount} pages`);
-    return imagePaths;
+    throw new Error('No images were generated from the PDF with any method');
   } catch (error) {
-    console.error('PDF conversion error:', error);
+    console.error('PDF fallback conversion error:', error);
     throw new Error(`Failed to convert PDF to images: ${error.message}`);
   }
 };
 
-// Upload Images to Supabase
+// Upload Images to Supabase with optimized batch processing
 const uploadToSupabase = async (imagePaths) => {
   const urls = [];
-
-  for (const imagePath of imagePaths) {
-    const fileName = path.basename(imagePath);
-    const fileBuffer = fs.readFileSync(imagePath);
-
-    const { data, error } = await supabase.storage
-      .from(process.env.SUPABASE_BUCKET)
-      .upload(`uploads/${Date.now()}-${fileName}`, fileBuffer, {
-        contentType: 'image/png',
-        upsert: false
-      });
-
-    if (error) {
-      console.error(`Upload failed for ${fileName}:`, error.message);
-      throw new Error(`Failed to upload ${fileName}`);
-    }
-
-    const publicUrl = `${supabase.supabaseUrl}/storage/v1/object/public/${process.env.SUPABASE_BUCKET}/${data.path}`;
-    urls.push(publicUrl);
-
-    await unlink(imagePath).catch(err => console.warn(`Image cleanup error for ${fileName}:`, err));
+  const batchSize = 2; // Upload 2 images at a time for better parallel processing
+  
+  // Process images in batches
+  for (let i = 0; i < imagePaths.length; i += batchSize) {
+    const batch = imagePaths.slice(i, i + batchSize);
+    const batchPromises = batch.map(async (imagePath) => {
+      const fileName = path.basename(imagePath);
+      const fileBuffer = fs.readFileSync(imagePath);
+      
+      const { data, error } = await supabase.storage
+        .from(process.env.SUPABASE_BUCKET)
+        .upload(`uploads/${Date.now()}-${fileName}`, fileBuffer, {
+          contentType: 'image/jpeg', // Use JPEG for faster uploads
+          upsert: false
+        });
+      
+      if (error) {
+        console.error(`Upload failed for ${fileName}:`, error.message);
+        throw new Error(`Failed to upload ${fileName}`);
+      }
+      
+      const publicUrl = `${supabase.supabaseUrl}/storage/v1/object/public/${process.env.SUPABASE_BUCKET}/${data.path}`;
+      
+      // Clean up the image file after successful upload
+      await unlink(imagePath).catch(err => console.warn(`Image cleanup error for ${fileName}:`, err));
+      
+      return publicUrl;
+    });
+    
+    // Wait for this batch to complete
+    const batchUrls = await Promise.all(batchPromises);
+    urls.push(...batchUrls);
+    
+    console.log(`Uploaded batch ${i/batchSize + 1} of ${Math.ceil(imagePaths.length/batchSize)}`);
   }
-
+  
   return urls;
 };
 
@@ -269,12 +270,16 @@ const uploadNewspaper = async (req, res) => {
     const isPublished = publicationDate <= now;
 
     console.log('Converting PDF to images...');
+    const startTime = Date.now();
     const imagePaths = await convertPDFToImages(pdfPath, PAGES_DIR);
-    console.log(`Generated ${imagePaths.length} high-quality images from PDF`);
+    const conversionTime = (Date.now() - startTime) / 1000;
+    console.log(`Generated ${imagePaths.length} images from PDF in ${conversionTime} seconds`);
 
     console.log('Uploading images to Supabase...');
+    const uploadStartTime = Date.now();
     const imageUrls = await uploadToSupabase(imagePaths);
-    console.log(`Successfully uploaded ${imageUrls.length} images to Supabase`);
+    const uploadTime = (Date.now() - uploadStartTime) / 1000;
+    console.log(`Successfully uploaded ${imageUrls.length} images to Supabase in ${uploadTime} seconds`);
 
     const newspaper = new NewspaperDetails({
       newspaperLinks: imageUrls,
