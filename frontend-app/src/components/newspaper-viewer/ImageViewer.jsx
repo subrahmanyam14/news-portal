@@ -362,7 +362,7 @@ export default function ImageViewer({
             <HTMLFlipBook
               ref={bookRef}
               width={window.innerWidth}
-              height={(window.innerWidth * 16) / 9}
+              height={(window.innerWidth * 3) / 2}
               size="stretch"
               minWidth={window.innerWidth}
               maxWidth={window.innerWidth}

@@ -247,10 +247,10 @@ const Navbar = () => {
 
   return (
     <header className="z-50 bg-[#403fbb] text-white shadow-md">
-      <div className="container mx-auto px-4 py-4 flex flex-wrap items-center justify-between">
-        <div className="flex items-center">
+      <div className="container mx-auto md:p-4 md:flex md:flex-wrap md:items-center md:justify-between block">
+        <div className="flex items-center justify-center md:justify-start w-full md:w-auto md:mb-0">
           <div
-            className="mr-4 text-3xl font-bold cursor-pointer relative group"
+            className="text-3xl font-bold cursor-pointer relative group md:mr-4"
             onClick={handleHome}
           >
             {isLogoLoading ? (
@@ -259,8 +259,8 @@ const Navbar = () => {
                 <span className="text-white">Paper</span>
               </div>
             ) : logoUrl ? (
-              <div className="h-10 flex items-center">
-                <img src={logoUrl} alt="E-Paper Logo" className="max-h-full" />
+              <div className="h-fit md:h-10 flex items-center justify-center">
+                <img src={logoUrl} alt="E-Paper Logo" className="max-h-full mx-auto md:mx-0" />
                 {userRole === 'superadmin' && (
                   <button
                     onClick={(e) => {
@@ -348,13 +348,16 @@ const Navbar = () => {
           )}
         </div>
 
-        <button
-          className="md:hidden text-white hover:text-gray-200 transition-colors"
-          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          aria-label="Toggle menu"
-        >
-          {isMobileMenuOpen ? <X /> : <Menu />}
-        </button>
+        {/* Mobile menu button in its own container */}
+        <div className="md:hidden flex justify-end w-full my-2 pr-2">
+          <button
+            className="text-white hover:text-gray-200 transition-colors"
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            aria-label="Toggle menu"
+          >
+            {isMobileMenuOpen ? <X /> : <Menu />}
+          </button>
+        </div>
       </div>
 
       {/* Mobile menu */}
