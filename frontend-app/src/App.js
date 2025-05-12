@@ -16,6 +16,7 @@ const App = () => {
     const isAuthenticated = localStorage.getItem('token') !== null;
     return isAuthenticated ? children : <Navigate to="/login" />;
   };
+  
 
   // Super Admin route component
   const SuperAdminRoute = ({ children }) => {
