@@ -228,7 +228,7 @@ export default function ImageViewer({
   };
 
   return (
-    <div className="w-full flex flex-col justify-center items-center relative p-0 md:p-4">
+    <div className="w-full flex flex-col justify-center items-center relative p-0">
       <button
         className="absolute left-2 top-1/2 transform -translate-y-1/2 bg-gray-700 p-2 rounded-full text-white hover:bg-gray-600 disabled:opacity-50 z-10 transition-all duration-300 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:hover:bg-gray-400"
         onClick={handlePrevClick}
@@ -358,7 +358,7 @@ export default function ImageViewer({
             </div>
           </div>
         ) : (
-          <div className="flip-book-container w-full h-full">
+          <div className="flip-book-container w-full h-full mt-0">
             <HTMLFlipBook
               ref={bookRef}
               width={window.innerWidth}
@@ -401,6 +401,8 @@ export default function ImageViewer({
       <style jsx global>{`
         .newspaper-book {
           background-color: transparent !important;
+          margin-top: 0 !important;
+          padding-top: 0 !important;
         }
         
         .page {
@@ -409,7 +411,8 @@ export default function ImageViewer({
           display: flex;
           align-items: center;
           justify-content: center;
-          padding: 10px;
+          padding: 0;
+          margin-top: 0;
         }
         
         .page-content {
@@ -418,51 +421,68 @@ export default function ImageViewer({
           display: flex;
           justify-content: center;
           align-items: center;
+          margin: 0;
+          padding: 0;
         }
         
         .stf__parent {
           background: transparent !important;
+          margin-top: 0 !important;
+          padding-top: 0 !important;
         }
         
         .stf__wrapper {
           box-shadow: none !important;
+          margin-top: 0 !important;
+          padding-top: 0 !important;
         }
         
         .stf__block {
           box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
           background: white;
+          margin-top: 0 !important;
+          padding-top: 0 !important;
         }
-        
         
         /* Disable page click events */
         .stf__block .page-wrapper {
           pointer-events: none !important;
+          margin-top: 0 !important;
+          padding-top: 0 !important;
         }
         
         .stf__block .--left, 
         .stf__block .--right {
           pointer-events: none !important;
+          margin-top: 0 !important;
+          padding-top: 0 !important;
         }
         
         /* Enable pointer events for the image itself so it can still be clicked for zoom */
         .page-content img {
           pointer-events: auto !important;
+          margin-top: 0 !important;
+          padding-top: 0 !important;
         }
           
         @media (max-width: 768px) {
           .newspaper-book {
             width: 100% !important;
             height: 100% !important;
+            margin-top: 0 !important;
+            padding-top: 0 !important;
           }
           
           .page {
             padding: 0 !important;
             width: 100% !important;
             height: 100% !important;
+            margin-top: 0 !important;
           }
           
           .page-content {
             padding: 0 !important;
+            margin-top: 0 !important;
           }
           
           .page-content img {
@@ -470,7 +490,10 @@ export default function ImageViewer({
             width: auto;
             height: auto;
             object-fit: contain;
+            margin-top: 0 !important;
+            padding-top: 0 !important;
           }
+          
           .page-content img {
             touch-action: none !important;
           }
