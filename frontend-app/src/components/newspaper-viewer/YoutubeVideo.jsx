@@ -73,22 +73,18 @@ export default function YoutubeVideo({ link }) {
     };
   }, [videoId, apiReady]);
 
-  if (!link || !videoId) return null;
+  // if (!link || !videoId) return null;
 
   return (
-    <div className="flex flex-col max-w-full items-center justify-center mx-6 md:max-w-4xl my-6">
+    <div className="flex justify-center max-w-full items-center mx-6 my-6">
       <div
-        className={`w-full relative rounded-lg shadow-2xl transition-all duration-700 transform ${isLoaded ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`}
+        className={`w-full md:max-w-4xl relative rounded-lg shadow-2xl transition-all duration-700 transform ${isLoaded ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`}
         style={{ aspectRatio: '16/9' }}
       >
         {/* YouTube iframe */}
         <div className="absolute inset-0 m-1 overflow-hidden rounded-md">
           <div ref={iframeRef} className="w-full h-full"></div>
         </div>
-      </div>
-
-      {/* Optional controls underneath */}
-      <div className={`mt-4 flex space-x-4 transition-all duration-700 ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
       </div>
     </div>
   );
