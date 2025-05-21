@@ -88,6 +88,7 @@ export default function NewspaperViewer() {
 	const clipContainerRef = useRef(null);
 	const [youtubeLink, setYoutubeLink] = useState(null);
 	const [zoomedImage, setZoomedImage] = useState(null);
+	const [clickPosition, setClickPosition] = useState(null);
 
 	// Helper function to format date as YYYY-MM-DD
 	const formatDate = (date) => {
@@ -688,63 +689,18 @@ export default function NewspaperViewer() {
 						<div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
 						<p className="mt-4 text-gray-700">Loading newspaper...</p>
 					</div>
-				) : error ? (
-					<div className="flex flex-col">
-						<div className="text-center p-4 text-yellow-600 bg-yellow-100 rounded mb-4">
-							{error}
-						</div>
-						<ImageViewer
-							clipContainerRef={clipContainerRef}
-							activeImage={activeImage}
-							nextImageToShow={nextImageToShow}
-							isFlipping={isFlipping}
-							flipDirection={flipDirection}
-							noTransition={noTransition}
-							isClipping={isClipping}
-							onPrevImage={prevImage}
-							onNextImage={nextImage}
-							images={images}
-							onZoomClick={(image) => {
-								setIsZoomed(true);
-								// If an image is explicitly passed, use that one
-								if (image) {
-									// Store the zoomed image separately from active/next images
-									setZoomedImage(image);
-								}
-							}}
-							clipBox={clipBox}
-							onMoveStart={handleMoveStart}
-							onTouchMoveStart={handleTouchMoveStart}
-							onResizeStart={handleResizeStart}
-							onDownloadClippedImage={downloadClippedImage}
-							onShareToFacebook={shareToFacebook}
-							onShareToWhatsApp={shareToWhatsApp}
-							onToggleClipping={toggleClippingMode}
-							clipImageLoading={clipImageLoading}
-						/>
-
-						<Pagination
-							activeImage={activeImage}
-							images={images}
-							onPageChange={goToPage}
-							isFlipping={isFlipping}
-						/>
-
-						<ThumbnailStrip
-							images={images}
-							activeImage={activeImage}
-							onPageChange={goToPage}
-							isClipping={isClipping}
-						/>
-
-						{youtubeLink && <YoutubeVideo link={youtubeLink} />}
-					</div>
 				) : !activeImage ? (
 					<div className="text-center p-8 text-gray-500">
 						No newspaper available for selected date
 					</div>
 				) : (
-					<>
+					<div className="flex flex-col">
+						{error && (
+							<div className="text-center p-4 text-yellow-600 bg-yellow-100 rounded mb-4">
+								{error}
+							</div>
+						)}
+
 						<ImageViewer
 							clipContainerRef={clipContainerRef}
 							activeImage={activeImage}
@@ -756,12 +712,11 @@ export default function NewspaperViewer() {
 							onPrevImage={prevImage}
 							onNextImage={nextImage}
 							images={images}
-							onZoomClick={(image) => {
+							onZoomClick={(image, clickPosition) => {
 								setIsZoomed(true);
-								// If an image is explicitly passed, use that one
 								if (image) {
-									// Store the zoomed image separately from active/next images
 									setZoomedImage(image);
+									setClickPosition(clickPosition); // Store click position
 								}
 							}}
 							clipBox={clipBox}
@@ -790,13 +745,14 @@ export default function NewspaperViewer() {
 						/>
 
 						{youtubeLink && <YoutubeVideo link={youtubeLink} />}
-					</>
+					</div>
 				)}
 			</div>
 
 			{isZoomed && activeImage && (
 				<ZoomModal
 					activeImage={zoomedImage || activeImage}
+					clickPosition={clickPosition} // Pass click position to ZoomModal
 					onClose={() => {
 						setIsZoomed(false);
 						setZoomedImage(null);
@@ -806,4 +762,3 @@ export default function NewspaperViewer() {
 		</div>
 	);
 }
-
