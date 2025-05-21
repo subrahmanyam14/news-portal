@@ -2,14 +2,14 @@ import { useState, useRef, useEffect } from "react";
 import { ZoomIn, ZoomOut, Maximize, Minimize } from "lucide-react";
 
 export default function ZoomModal({ activeImage, onClose }) {
-  const [zoomLevel, setZoomLevel] = useState(75);
+  const [zoomLevel, setZoomLevel] = useState(50);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [viewportDimensions, setViewportDimensions] = useState({ width: 0, height: 0 });
   const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
   const [touchDistance, setTouchDistance] = useState(null);
-  const [initialZoom, setInitialZoom] = useState(75);
+  const [initialZoom, setInitialZoom] = useState(50);
   const [isZoomedIn, setIsZoomedIn] = useState(false);
 
   const containerRef = useRef(null);
@@ -60,7 +60,7 @@ export default function ZoomModal({ activeImage, onClose }) {
     const clientX = e.clientX || (e.touches && e.touches[0]?.clientX) || 0;
     const clientY = e.clientY || (e.touches && e.touches[0]?.clientY) || 0;
     const newZoom = Math.max(zoomLevel - 25, 50);
-    if (newZoom === 75) {
+    if (newZoom === 50) {
       setPosition({ x: 0, y: 0 });
     }
     zoomToPoint(clientX, clientY, newZoom);
@@ -69,7 +69,7 @@ export default function ZoomModal({ activeImage, onClose }) {
   const toggleZoom = (e) => {
     if (isZoomedIn) {
       // Zoom out to initial
-      setZoomLevel(75);
+      setZoomLevel(50);
       setPosition({ x: 0, y: 0 });
       setIsZoomedIn(false);
     } else {
@@ -123,7 +123,7 @@ export default function ZoomModal({ activeImage, onClose }) {
     const newZoom = Math.min(Math.max(zoomLevel + (delta * zoomStep), 50), calculateMaxZoom());
     if (newZoom !== zoomLevel) {
       zoomToPoint(e.clientX, e.clientY, newZoom);
-      setIsZoomedIn(newZoom > 75);
+      setIsZoomedIn(newZoom > 50);
     }
   };
 
@@ -213,7 +213,7 @@ export default function ZoomModal({ activeImage, onClose }) {
           calculateMaxZoom()
         );
         zoomToPoint(midpoint.x, midpoint.y, newZoom);
-        setIsZoomedIn(newZoom > 75);
+        setIsZoomedIn(newZoom > 50);
       }
     }
   };
@@ -250,7 +250,7 @@ export default function ZoomModal({ activeImage, onClose }) {
   }, []);
 
   useEffect(() => {
-    setIsZoomedIn(zoomLevel > 75);
+    setIsZoomedIn(zoomLevel > 50);
     if (containerRef.current) {
       containerRef.current.style.cursor = isDragging ? 'grabbing' : 'grab';
     }
