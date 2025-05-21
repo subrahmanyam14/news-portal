@@ -9,7 +9,6 @@ import NewspaperViewer from './components/newspaper-viewer/NewspaperViewer';
 import SuperAdminDashboard from './components/SuperAdminDashboard';
 
 
-
 const App = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
 
