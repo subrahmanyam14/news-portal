@@ -218,7 +218,17 @@ export default function ImageViewer({
             className="w-full h-full object-contain cursor-zoom-in"
             onClick={(e) => {
               e.stopPropagation(); // Stop event bubbling
-              onZoomClick(image); // Pass the specific image to zoom
+
+              // Get the click position relative to the image
+              const rect = e.target.getBoundingClientRect();
+              const x = e.clientX - rect.left;
+              const y = e.clientY - rect.top;
+
+              // Calculate position as percentages of image dimensions
+              const percentX = x / rect.width;
+              const percentY = y / rect.height;
+
+              onZoomClick(image, { percentX, percentY }); // Pass image and click position
             }}
             style={{ maxHeight: '100%' }}
           />
@@ -397,120 +407,6 @@ export default function ImageViewer({
       >
         <ChevronRight size={24} />
       </button>
-
-      <style jsx global>{`
-        .newspaper-book {
-          background-color: transparent !important;
-          margin-top: 0 !important;
-          padding-top: 0 !important;
-        }
-        
-        .page {
-          background-color: white;
-          box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 0;
-          margin-top: 0;
-        }
-        
-        .page-content {
-          width: 100%;
-          height: 100%;
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          margin: 0;
-          padding: 0;
-        }
-        
-        .stf__parent {
-          background: transparent !important;
-          margin-top: 0 !important;
-          padding-top: 0 !important;
-        }
-        
-        .stf__wrapper {
-          box-shadow: none !important;
-          margin-top: 0 !important;
-          padding-top: 0 !important;
-        }
-        
-        .stf__block {
-          box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
-          background: white;
-          margin-top: 0 !important;
-          padding-top: 0 !important;
-        }
-        
-        /* Disable page click events */
-        .stf__block .page-wrapper {
-          pointer-events: none !important;
-          margin-top: 0 !important;
-          padding-top: 0 !important;
-        }
-        
-        .stf__block .--left, 
-        .stf__block .--right {
-          pointer-events: none !important;
-          margin-top: 0 !important;
-          padding-top: 0 !important;
-        }
-        
-        /* Enable pointer events for the image itself so it can still be clicked for zoom */
-        .page-content img {
-          pointer-events: auto !important;
-          margin-top: 0 !important;
-          padding-top: 0 !important;
-        }
-          
-        @media (max-width: 768px) {
-          .newspaper-book {
-            width: 100% !important;
-            height: 100% !important;
-            margin-top: 0 !important;
-            padding-top: 0 !important;
-          }
-          
-          .page {
-            padding: 0 !important;
-            width: 100% !important;
-            height: 100% !important;
-            margin-top: 0 !important;
-          }
-          
-          .page-content {
-            padding: 0 !important;
-            margin-top: 0 !important;
-          }
-          
-          .page-content img {
-            max-width: 100%;
-            width: auto;
-            height: auto;
-            object-fit: contain;
-            margin-top: 0 !important;
-            padding-top: 0 !important;
-          }
-          
-          .page-content img {
-            touch-action: none !important;
-          }
-          
-          .absolute.cursor-move,
-          [class*="cursor-n"],
-          [class*="cursor-s"],
-          [class*="cursor-e"],
-          [class*="cursor-w"] {
-            touch-action: none !important;
-          }
-          
-          .stf__block {
-            touch-action: pan-y !important;
-          }
-        }
-      `}</style>
     </div>
   );
 }

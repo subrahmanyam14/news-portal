@@ -1,16 +1,20 @@
 import { useState, useRef, useEffect } from "react";
 import { ZoomIn, ZoomOut, Maximize, Minimize } from "lucide-react";
 
-export default function ZoomModal({ activeImage, onClose }) {
-  const [zoomLevel, setZoomLevel] = useState(75);
+export default function ZoomModal({ activeImage, clickPosition, onClose }) {
+  // Set a higher initial zoom when a click position is provided
+  const initialZoomLevel = clickPosition ? 200 : 75;
+  
+  const [zoomLevel, setZoomLevel] = useState(initialZoomLevel);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [viewportDimensions, setViewportDimensions] = useState({ width: 0, height: 0 });
   const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
   const [touchDistance, setTouchDistance] = useState(null);
-  const [initialZoom, setInitialZoom] = useState(75);
-  const [isZoomedIn, setIsZoomedIn] = useState(false);
+  const [initialZoom, setInitialZoom] = useState(initialZoomLevel);
+  const [isZoomedIn, setIsZoomedIn] = useState(initialZoomLevel > 75);
+  const [hasAppliedInitialPosition, setHasAppliedInitialPosition] = useState(false);
 
   const containerRef = useRef(null);
   const zoomedImageRef = useRef(null);
@@ -86,15 +90,15 @@ export default function ZoomModal({ activeImage, onClose }) {
     }
   };
 
-  const calculateConstraints = (zoom = zoomLevel) => {
-    if (!containerRef.current || !imageRef.current) return { minX: 0, maxX: 0, minY: 0, maxY: 0 };
+  const calculateConstraints = (zoom = zoomLevel, dimensions = imageDimensions) => {
+    if (!containerRef.current || !dimensions.width) return { minX: 0, maxX: 0, minY: 0, maxY: 0 };
 
     const containerWidth = containerRef.current.clientWidth;
     const containerHeight = containerRef.current.clientHeight;
     const zoomFactor = zoom / 100;
 
-    const scaledWidth = imageDimensions.width * zoomFactor;
-    const scaledHeight = imageDimensions.height * zoomFactor;
+    const scaledWidth = dimensions.width * zoomFactor;
+    const scaledHeight = dimensions.height * zoomFactor;
 
     const horizontalConstraint = Math.max(0, (scaledWidth - containerWidth) / 2);
     const verticalConstraint = Math.max(0, (scaledHeight - containerHeight) / 2);
@@ -109,10 +113,11 @@ export default function ZoomModal({ activeImage, onClose }) {
 
   const handleImageLoaded = () => {
     if (imageRef.current) {
-      setImageDimensions({
+      const newDimensions = {
         width: imageRef.current.naturalWidth,
         height: imageRef.current.naturalHeight
-      });
+      };
+      setImageDimensions(newDimensions);
     }
   };
 
@@ -230,6 +235,30 @@ export default function ZoomModal({ activeImage, onClose }) {
       });
     }
   };
+
+  // Effect to apply click position after image dimensions are known
+  useEffect(() => {
+    if (clickPosition && 
+        !hasAppliedInitialPosition && 
+        imageDimensions.width > 0 && 
+        containerRef.current) {
+      
+      const zoomFactor = zoomLevel / 100;
+      
+      // This is the key fix - we need to use negative offsets
+      // Multiply by -1 to move the view in the correct direction
+      const offsetX = -1 * (clickPosition.percentX - 0.5) * imageDimensions.width * zoomFactor;
+      const offsetY = -1 * (clickPosition.percentY - 0.5) * imageDimensions.height * zoomFactor;
+      
+      const constraints = calculateConstraints();
+      setPosition({
+        x: Math.min(Math.max(offsetX, constraints.minX), constraints.maxX),
+        y: Math.min(Math.max(offsetY, constraints.minY), constraints.maxY)
+      });
+      
+      setHasAppliedInitialPosition(true);
+    }
+  }, [clickPosition, imageDimensions, hasAppliedInitialPosition, zoomLevel]);
 
   useEffect(() => {
     const updateViewportDimensions = () => {

@@ -88,6 +88,7 @@ export default function NewspaperViewer() {
 	const clipContainerRef = useRef(null);
 	const [youtubeLink, setYoutubeLink] = useState(null);
 	const [zoomedImage, setZoomedImage] = useState(null);
+	const [clickPosition, setClickPosition] = useState(null);
 
 	// Helper function to format date as YYYY-MM-DD
 	const formatDate = (date) => {
@@ -711,10 +712,11 @@ export default function NewspaperViewer() {
 							onPrevImage={prevImage}
 							onNextImage={nextImage}
 							images={images}
-							onZoomClick={(image) => {
+							onZoomClick={(image, clickPosition) => {
 								setIsZoomed(true);
 								if (image) {
 									setZoomedImage(image);
+									setClickPosition(clickPosition); // Store click position
 								}
 							}}
 							clipBox={clipBox}
@@ -750,6 +752,7 @@ export default function NewspaperViewer() {
 			{isZoomed && activeImage && (
 				<ZoomModal
 					activeImage={zoomedImage || activeImage}
+					clickPosition={clickPosition} // Pass click position to ZoomModal
 					onClose={() => {
 						setIsZoomed(false);
 						setZoomedImage(null);
