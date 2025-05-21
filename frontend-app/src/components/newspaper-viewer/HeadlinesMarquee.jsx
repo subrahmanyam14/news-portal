@@ -21,7 +21,7 @@ export default function HeadlinesMarquee({ headlines, loading }) {
 						href={headline.path}
 						target="_blank"
 						rel="noopener noreferrer"
-						className="mr-6 hover:text-blue-500"
+						className="font-noto mr-6 hover:text-blue-500"
 					>
 						● {headline.name}
 					</a>

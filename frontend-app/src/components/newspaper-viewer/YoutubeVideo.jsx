@@ -85,7 +85,7 @@ export default function YoutubeLiveVideo({ link }) {
         className={`w-full md:max-w-4xl relative rounded-lg shadow-2xl transition-all duration-700 transform ${isLoaded ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`}
         style={{ aspectRatio: '16/9' }}
       >
-        <div className="absolute inset-0 m-1 overflow-hidden rounded-md">
+        <div className="absolute inset-0 overflow-hidden rounded-md">
           <div ref={iframeRef} className="w-full h-full"></div>
         </div>
       </div>
