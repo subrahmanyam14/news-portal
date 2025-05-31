@@ -3,10 +3,15 @@ const fs = require('fs');
 const path = require('path');
 const Logo = require('../model/Logo');
 const { promisify } = require('util');
-const supabase = require("../supabase/config");
+const { PutObjectCommand, DeleteObjectCommand } = require("@aws-sdk/client-s3");
+const s3Client = require("../config/s3Client");
 
 // Promisify file system functions
 const unlink = promisify(fs.unlink);
+
+// Debug the s3Client import
+console.log('Imported s3Client type:', typeof s3Client);
+console.log('s3Client.send type:', typeof s3Client?.send);
 
 // @desc    Get logo
 // @route   GET /api/v1/logo
@@ -50,49 +55,80 @@ exports.addLogo = async (req, res) => {
     let tempFilePath = req.file.path;
 
     try {
-        // Find existing logo to delete from Supabase if it exists
+        // Validate s3Client before using
+        if (!s3Client || typeof s3Client.send !== 'function') {
+            throw new Error('S3 client is not properly initialized. Check your s3Client configuration.');
+        }
+
+        // Find existing logo to delete from Contabo if it exists
         const existingLogo = await Logo.findOne();
 
         if (existingLogo && existingLogo.filePath) {
             try {
-                // Delete old logo from Supabase
-                const { error: deleteError } = await supabase.storage
-                    .from(process.env.SUPABASE_BUCKET)
-                    .remove([existingLogo.filePath]);
+                // Delete old logo from Contabo S3
+                const deleteParams = {
+                    Bucket: process.env.CONTABO_BUCKET_NAME || "ezypress",
+                    Key: existingLogo.filePath
+                };
+
+                const deleteCommand = new DeleteObjectCommand(deleteParams);
+                await s3Client.send(deleteCommand);
+                console.log('Old logo deleted from Contabo S3');
                 
-                if (deleteError) {
-                    console.error('Error deleting old logo:', deleteError.message);
-                    // Don't fail the operation if deletion fails
-                }
             } catch (deleteErr) {
-                console.error('Error in old logo deletion:', deleteErr);
+                console.error('Error deleting old logo from Contabo:', deleteErr);
+                // Don't fail the operation if deletion fails
             }
         }
 
-        // Upload new logo to Supabase
+        // Upload new logo to Contabo S3
         const fileName = path.basename(req.file.path);
         const fileBuffer = fs.readFileSync(req.file.path);
-        const filePath = `epaper/logos/${Date.now()}-${fileName}`;
+        const timestamp = Date.now();
+        const filePath = `epaper/logos/${timestamp}-${fileName}`;
         
-        const { data, error: uploadError } = await supabase.storage
-            .from(process.env.SUPABASE_BUCKET)
-            .upload(filePath, fileBuffer, {
-                contentType: req.file.mimetype,
-                upsert: false
-            });
+        const uploadParams = {
+            Bucket: process.env.CONTABO_BUCKET_NAME || "ezypress",
+            Key: filePath,
+            Body: fileBuffer,
+            ContentType: req.file.mimetype,
+        };
 
-        if (uploadError) {
-            throw new Error(`Failed to upload logo: ${uploadError.message}`);
+        console.log('Attempting to upload to S3 with params:', {
+            Bucket: uploadParams.Bucket,
+            Key: uploadParams.Key,
+            ContentType: uploadParams.ContentType
+        });
+
+        const uploadCommand = new PutObjectCommand(uploadParams);
+        const uploadResult = await s3Client.send(uploadCommand);
+        console.log('Logo uploaded to Contabo S3:', uploadResult);
+
+        // Generate public URL - FIXED FORMAT FOR CONTABO
+        const bucketName = process.env.CONTABO_BUCKET_NAME || "ezypress";
+        const endpoint = process.env.CONTABO_ENDPOINT;
+        const accountId = process.env.CONTABO_ACCOUNT_ID; // You need to add this env variable
+        
+        let publicUrl;
+        
+        if (accountId) {
+            // Format: https://sin1.contabostorage.com/ACCOUNT_ID:BUCKET_NAME/path/to/file
+            const cleanEndpoint = endpoint.replace('https://', '');
+            publicUrl = `https://${cleanEndpoint}/${accountId}:${bucketName}/${filePath}`;
+        } else {
+            // Fallback to the format you were using (but this might not work)
+            console.warn('CONTABO_ACCOUNT_ID not set. Using fallback URL format which may not work.');
+            const cleanEndpoint = endpoint.replace('https://', '');
+            publicUrl = `https://${bucketName}.${cleanEndpoint}/${filePath}`;
         }
-
-        // Generate public URL
-        const publicUrl = `${process.env.SUPABASE_URL}/storage/v1/object/public/${process.env.SUPABASE_BUCKET}/${filePath}`;
+        
+        console.log('Generated public URL:', publicUrl);
 
         // Create or update logo in database
         const logoData = {
             url: publicUrl,
             filePath: filePath,
-            publicId: filePath // Using filePath as publicId since we're not using Cloudinary
+            publicId: filePath
         };
 
         let logo;
@@ -117,6 +153,14 @@ exports.addLogo = async (req, res) => {
         });
 
     } catch (error) {
+        // Enhanced error logging
+        console.error('Logo upload error details:', {
+            message: error.message,
+            statusCode: error.$metadata?.httpStatusCode,
+            requestId: error.$metadata?.requestId,
+            stack: error.stack
+        });
+
         // Remove temporary file if it exists
         if (fs.existsSync(tempFilePath)) {
             await unlink(tempFilePath).catch(err => 
@@ -124,11 +168,11 @@ exports.addLogo = async (req, res) => {
             );
         }
 
-        console.error('Logo upload error:', error);
         res.status(500).json({
             success: false,
             message: 'Error uploading logo',
-            error: error.message
+            error: error.message,
+            details: error.$metadata?.httpStatusCode ? `HTTP ${error.$metadata.httpStatusCode}` : 'S3 Client Error'
         });
     }
 };
