@@ -29,7 +29,7 @@ const ensureDirsExist = async () => {
   if (!fs.existsSync(PAGES_DIR)) await mkdir(PAGES_DIR, { recursive: true });
 };
 
-// Configure multer for PDF uploads
+// Enhanced multer configuration with better error handling
 const storage = multer.diskStorage({
   destination: async (req, file, cb) => {
     try {
@@ -40,21 +40,31 @@ const storage = multer.diskStorage({
     }
   },
   filename: (req, file, cb) => {
-    const safeName = file.originalname.replace(/[^a-zA-Z0-9.]/g, '_');
+    const safeName = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
     cb(null, `upload-${Date.now()}-${safeName}`);
   }
 });
 
+// Enhanced multer configuration with better limits and error handling
 const upload = multer({
   storage,
-  limits: { fileSize: 100 * 1024 * 1024 }, // 100MB
+  limits: { 
+    fileSize: 100 * 1024 * 1024, // 100MB
+    fieldSize: 25 * 1024 * 1024,  // 25MB for field data
+    fields: 10,                   // Maximum number of fields
+    files: 1                      // Maximum number of files
+  },
   fileFilter: (req, file, cb) => {
-    if (file.mimetype === 'application/pdf') cb(null, true);
-    else cb(new Error('Only PDF files are allowed'), false);
+    console.log('File filter - mimetype:', file.mimetype, 'originalname:', file.originalname);
+    if (file.mimetype === 'application/pdf') {
+      cb(null, true);
+    } else {
+      cb(new Error('Only PDF files are allowed'), false);
+    }
   }
 });
 
-// Configure multer for image uploads (for uploadImage function)
+// Enhanced image upload configuration
 const imageStorage = multer.diskStorage({
   destination: async (req, file, cb) => {
     try {
@@ -65,17 +75,26 @@ const imageStorage = multer.diskStorage({
     }
   },
   filename: (req, file, cb) => {
-    const safeName = file.originalname.replace(/[^a-zA-Z0-9.]/g, '_');
+    const safeName = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
     cb(null, `image-${Date.now()}-${safeName}`);
   }
 });
 
 const imageUpload = multer({
   storage: imageStorage,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB for images
+  limits: { 
+    fileSize: 10 * 1024 * 1024, // 10MB for images
+    fieldSize: 2 * 1024 * 1024,  // 2MB for field data
+    fields: 5,                   // Maximum number of fields
+    files: 1                     // Maximum number of files
+  },
   fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) cb(null, true);
-    else cb(new Error('Only image files are allowed'), false);
+    console.log('Image filter - mimetype:', file.mimetype, 'originalname:', file.originalname);
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed'), false);
+    }
   }
 });
 
@@ -85,7 +104,7 @@ const validatePDF = async (pdfPath) => {
     const pdfBytes = fs.readFileSync(pdfPath);
     const pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
     const pageCount = pdfDoc.getPageCount();
-    
+
     if (pageCount === 0) throw new Error('PDF file has no pages');
     return pageCount;
   } catch (error) {
@@ -114,9 +133,9 @@ const generateContaboPublicUrl = (filePath) => {
   const bucketName = process.env.CONTABO_BUCKET_NAME || "ezypress";
   const endpoint = process.env.CONTABO_ENDPOINT;
   const accountId = process.env.CONTABO_ACCOUNT_ID;
-  
+
   let publicUrl;
-  
+
   if (accountId) {
     // Format: https://sin1.contabostorage.com/ACCOUNT_ID:BUCKET_NAME/path/to/file
     const cleanEndpoint = endpoint.replace('https://', '');
@@ -127,7 +146,7 @@ const generateContaboPublicUrl = (filePath) => {
     const cleanEndpoint = endpoint.replace('https://', '');
     publicUrl = `https://${bucketName}.${cleanEndpoint}/${filePath}`;
   }
-  
+
   return publicUrl;
 };
 
@@ -141,7 +160,7 @@ const uploadToContaboS3 = async (fileBuffer, fileName, contentType, folder = 'ep
 
     const timestamp = Date.now();
     const filePath = `${folder}/${timestamp}-${fileName}`;
-    
+
     const uploadParams = {
       Bucket: process.env.CONTABO_BUCKET_NAME || "ezypress",
       Key: filePath,
@@ -178,19 +197,19 @@ const uploadToContaboS3 = async (fileBuffer, fileName, contentType, folder = 'ep
 const convertPDFToImages = async (pdfPath, outputDir) => {
   try {
     if (!fs.existsSync(outputDir)) await mkdir(outputDir, { recursive: true });
-    
+
     // Get the page count from the PDF
     const pageCount = await validatePDF(pdfPath);
     console.log(`PDF has ${pageCount} pages`);
-    
+
     // Use pdftoppm with parallel processing
     console.log('Converting PDF to images with optimized settings...');
     const outputPrefix = path.join(outputDir, 'page');
-    
+
     // First, determine optimal DPI setting based on page count
     // Use 150 DPI for standard quality but faster conversion
     const dpi = 150;
-    
+
     // Use pdftoppm with optimized settings for speed
     // -r sets resolution (DPI)
     // -jpeg uses JPEG format which is faster to process than PNG
@@ -198,11 +217,11 @@ const convertPDFToImages = async (pdfPath, outputDir) => {
     // -l and -f parameters to process pages in parallel batches
     const batchSize = Math.min(pageCount, 4); // Process up to 4 pages at once
     const batches = [];
-    
+
     for (let i = 0; i < pageCount; i += batchSize) {
       const startPage = i + 1;
       const endPage = Math.min(startPage + batchSize - 1, pageCount);
-      
+
       // Create a batch for these pages
       batches.push({
         start: startPage,
@@ -210,14 +229,14 @@ const convertPDFToImages = async (pdfPath, outputDir) => {
         cmd: `pdftoppm -jpeg -jpegopt quality=85 -r ${dpi} -f ${startPage} -l ${endPage} "${pdfPath}" "${outputPrefix}"`
       });
     }
-    
+
     // Run conversion batches in parallel
-    await Promise.all(batches.map(batch => 
+    await Promise.all(batches.map(batch =>
       execCmd(batch.cmd)
         .then(() => console.log(`Converted pages ${batch.start}-${batch.end}`))
         .catch(err => console.error(`Error converting pages ${batch.start}-${batch.end}:`, err))
     ));
-    
+
     // Look for generated images
     const files = await readdir(outputDir);
     const generatedImages = files
@@ -229,14 +248,14 @@ const convertPDFToImages = async (pdfPath, outputDir) => {
         return numA - numB;
       })
       .map(file => path.join(outputDir, file));
-    
+
     if (generatedImages.length === 0) {
       // Fallback to the original method if no images were generated
       console.log('Fast conversion failed, falling back to standard method...');
       // Use the original method as fallback
       return await convertPDFToImagesFallback(pdfPath, outputDir);
     }
-    
+
     console.log(`Successfully converted ${generatedImages.length} pages with optimized pdftoppm`);
     return generatedImages;
   } catch (error) {
@@ -253,46 +272,46 @@ const convertPDFToImagesFallback = async (pdfPath, outputDir) => {
     // Method 1: Try pdftoppm (from poppler-utils)
     console.log('Trying standard pdftoppm conversion...');
     await execCmd(`pdftoppm -png -r 300 "${pdfPath}" "${path.join(outputDir, 'page')}"`);
-    
+
     // Look for generated images
     const files = fs.readdirSync(outputDir);
     const pdftoppmImages = files
       .filter(file => file.startsWith('page-') && file.endsWith('.png'))
       .map(file => path.join(outputDir, file));
-    
+
     if (pdftoppmImages.length > 0) {
       console.log(`Successfully converted ${pdftoppmImages.length} pages with standard pdftoppm`);
       return pdftoppmImages;
     }
-    
+
     // Method 2: Try ImageMagick
     console.log('Trying ImageMagick conversion...');
     await execCmd(`convert -density 300 "${pdfPath}" "${path.join(outputDir, 'page')}-%d.png"`);
-    
+
     // Look for generated images
     const imageMagickImages = files
       .filter(file => file.startsWith('page-') && file.endsWith('.png'))
       .map(file => path.join(outputDir, file));
-    
+
     if (imageMagickImages.length > 0) {
       console.log(`Successfully converted ${imageMagickImages.length} pages with ImageMagick`);
       return imageMagickImages;
     }
-    
+
     // Method 3: Try GhostScript
     console.log('Trying GhostScript conversion...');
     await execCmd(`gs -dSAFER -dBATCH -dNOPAUSE -sDEVICE=png16m -r300 -dTextAlphaBits=4 -dGraphicsAlphaBits=4 -o "${path.join(outputDir, 'page')}-%d.png" "${pdfPath}"`);
-    
+
     // Look for generated images
     const ghostScriptImages = files
       .filter(file => file.startsWith('page-') && file.endsWith('.png'))
       .map(file => path.join(outputDir, file));
-    
+
     if (ghostScriptImages.length > 0) {
       console.log(`Successfully converted ${ghostScriptImages.length} pages with GhostScript`);
       return ghostScriptImages;
     }
-    
+
     throw new Error('No images were generated from the PDF with any method');
   } catch (error) {
     console.error('PDF fallback conversion error:', error);
@@ -304,7 +323,7 @@ const convertPDFToImagesFallback = async (pdfPath, outputDir) => {
 const uploadToContabo = async (imagePaths) => {
   const urls = [];
   const batchSize = 2; // Upload 2 images at a time for better parallel processing
-  
+
   // Process images in batches
   for (let i = 0; i < imagePaths.length; i += batchSize) {
     const batch = imagePaths.slice(i, i + batchSize);
@@ -312,13 +331,13 @@ const uploadToContabo = async (imagePaths) => {
       const fileName = path.basename(imagePath);
       const fileBuffer = fs.readFileSync(imagePath);
       const contentType = fileName.endsWith('.jpg') || fileName.endsWith('.jpeg') ? 'image/jpeg' : 'image/png';
-      
+
       try {
         const result = await uploadToContaboS3(fileBuffer, fileName, contentType, 'epaper/newspapers');
-        
+
         // Clean up the image file after successful upload
         await unlink(imagePath).catch(err => console.warn(`Image cleanup error for ${fileName}:`, err));
-        
+
         console.log(`Successfully uploaded: ${fileName}`);
         return result.publicUrl;
       } catch (error) {
@@ -326,25 +345,40 @@ const uploadToContabo = async (imagePaths) => {
         throw new Error(`Failed to upload ${fileName}: ${error.message}`);
       }
     });
-    
+
     // Wait for this batch to complete
     const batchUrls = await Promise.all(batchPromises);
     urls.push(...batchUrls);
-    
+
     console.log(`Uploaded batch ${i/batchSize + 1} of ${Math.ceil(imagePaths.length/batchSize)}`);
   }
-  
+
   return urls;
 };
 
-// Controller for Newspaper Upload
+// Enhanced Controller for Newspaper Upload with better error handling
 const uploadNewspaper = async (req, res) => {
-  if (!req.file) return res.status(400).json({ message: 'No PDF file uploaded' });
+  console.log('Upload request received');
+  console.log('Headers:', req.headers);
+  console.log('Body fields:', Object.keys(req.body || {}));
+  console.log('File:', req.file ? 'File present' : 'No file');
+
+  if (!req.file) {
+    console.log('No file uploaded');
+    return res.status(400).json({ 
+      success: false,
+      message: 'No PDF file uploaded' 
+    });
+  }
 
   const pdfPath = req.file.path;
   let pageCount = 0;
 
   try {
+    console.log('Processing PDF:', req.file.originalname);
+    console.log('File size:', req.file.size);
+    console.log('File path:', pdfPath);
+
     // Clean up previous files if they exist
     await rm(PAGES_DIR, { recursive: true, force: true }).catch(() => {});
     await mkdir(PAGES_DIR, { recursive: true });
@@ -403,7 +437,7 @@ const uploadNewspaper = async (req, res) => {
     // Clean up in case of error
     await unlink(pdfPath).catch(err => console.warn('PDF cleanup error:', err));
     await rm(PAGES_DIR, { recursive: true, force: true }).catch(err => console.warn('Pages dir cleanup error:', err));
-    
+
     return res.status(500).json({
       success: false,
       message: 'Failed to process newspaper upload',
@@ -421,7 +455,7 @@ const getLatestNewspaper = async (req, res) => {
     }).sort({ publicationDate: -1 });
 
     if (!latestNewspaper) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
         message: 'No published newspapers available'
       });
@@ -433,7 +467,7 @@ const getLatestNewspaper = async (req, res) => {
     });
   } catch (error) {
     console.error('Fetch error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
       message: 'Failed to fetch the latest newspaper',
       error: error.message
@@ -444,17 +478,17 @@ const getLatestNewspaper = async (req, res) => {
 const getNewspaperByDate = async (req, res) => {
   try {
     const { date } = req.query;
-    
+
     if (!date) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        message: 'Date parameter is required' 
+        message: 'Date parameter is required'
       });
     }
 
     const startDate = new Date(date);
     startDate.setHours(0, 0, 0, 0);
-    
+
     const endDate = new Date(date);
     endDate.setHours(23, 59, 59, 999);
 
@@ -464,9 +498,9 @@ const getNewspaperByDate = async (req, res) => {
     });
 
     if (!newspaper) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: 'No published newspaper found for this date' 
+        message: 'No published newspaper found for this date'
       });
     }
 
@@ -476,10 +510,10 @@ const getNewspaperByDate = async (req, res) => {
     });
   } catch (error) {
     console.error('Date fetch error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
       message: 'Failed to fetch newspaper by date',
-      error: error.message 
+      error: error.message
     });
   }
 };
@@ -488,24 +522,24 @@ const getAvailableDates = async (req, res) => {
   try {
     const { month, year } = req.query;
     const now = new Date();
-    
+
     let query = {
       isPublished: true,
       publicationDate: { $lte: now }
     };
-    
+
     if (month && year) {
       const startDate = new Date(parseInt(year), parseInt(month) - 1, 1);
       const endDate = new Date(parseInt(year), parseInt(month), 0, 23, 59, 59, 999);
-      
+
       query.publicationDate.$gte = startDate;
       query.publicationDate.$lte = endDate;
     }
-    
+
     const dates = await NewspaperDetails.find(query)
       .select('publicationDate')
       .sort({ publicationDate: 1 });
-    
+
     const formattedDates = dates.map(item => {
       const date = new Date(item.publicationDate);
       return {
@@ -513,7 +547,7 @@ const getAvailableDates = async (req, res) => {
         id: item._id
       };
     });
-    
+
     res.json({
       success: true,
       data: formattedDates
@@ -540,7 +574,7 @@ const getNewspaperByPagination = async (req, res) => {
       isPublished: true,
       publicationDate: { $lte: now }
     });
-    
+
     const totalPages = Math.ceil(totalNewspapers / limit);
 
     // Get the newspaper for the current page
@@ -601,7 +635,7 @@ const getNewspapersIncludeFuture = async (req, res) => {
 
     // Get total count of newspapers (with or without future ones)
     const totalNewspapers = await NewspaperDetails.countDocuments(query);
-    
+
     const totalPages = Math.ceil(totalNewspapers / limit);
 
     // Get the newspaper for the current page
@@ -613,8 +647,8 @@ const getNewspapersIncludeFuture = async (req, res) => {
     if (!newspaper) {
       return res.status(404).json({
         success: false,
-        message: includeFuture 
-          ? 'No newspapers found' 
+        message: includeFuture
+          ? 'No newspapers found'
           : 'No published newspapers found',
       });
     }
@@ -667,27 +701,35 @@ const deleteNewspaper = async(req, res) => {
   }
 };
 
-// Updated uploadImage function to match logo controller approach
+// Enhanced uploadImage function with better error handling
 const uploadImage = async (req, res) => {
+  console.log('Image upload request received');
+  console.log('Headers:', req.headers);
+  console.log('File:', req.file ? 'File present' : 'No file');
+
   if (!req.file) {
-    return res.status(400).json({ 
-      success: false, 
-      message: 'No file uploaded' 
+    return res.status(400).json({
+      success: false,
+      message: 'No file uploaded'
     });
   }
 
   let tempFilePath = req.file.path;
 
   try {
+    console.log('Processing image:', req.file.originalname);
+    console.log('File size:', req.file.size);
+    console.log('File path:', tempFilePath);
+
     // Read file buffer
     const fileBuffer = fs.readFileSync(tempFilePath);
     const fileName = path.basename(tempFilePath);
-    
+
     // Upload to Contabo S3 using the same method as logo controller
     const result = await uploadToContaboS3(fileBuffer, fileName, req.file.mimetype, 'epaper/images');
 
     // Delete temporary file after successful upload
-    await unlink(tempFilePath).catch(err => 
+    await unlink(tempFilePath).catch(err =>
       console.error('Warning: Temp file deletion failed:', err)
     );
 
@@ -714,7 +756,7 @@ const uploadImage = async (req, res) => {
 
     // Remove temporary file if it exists
     if (fs.existsSync(tempFilePath)) {
-      await unlink(tempFilePath).catch(err => 
+      await unlink(tempFilePath).catch(err =>
         console.error('Error deleting temp file during cleanup:', err)
       );
     }
@@ -728,13 +770,60 @@ const uploadImage = async (req, res) => {
   }
 };
 
+// Enhanced error handling middleware
+const handleMulterError = (error, req, res, next) => {
+  console.error('Multer error:', error);
+  
+  if (error instanceof multer.MulterError) {
+    switch (error.code) {
+      case 'LIMIT_FILE_SIZE':
+        return res.status(400).json({
+          success: false,
+          message: 'File too large. Maximum size is 100MB for PDFs and 10MB for images.'
+        });
+      case 'LIMIT_FILE_COUNT':
+        return res.status(400).json({
+          success: false,
+          message: 'Too many files. Only one file allowed.'
+        });
+      case 'LIMIT_FIELD_COUNT':
+        return res.status(400).json({
+          success: false,
+          message: 'Too many fields in the form.'
+        });
+      case 'LIMIT_UNEXPECTED_FILE':
+        return res.status(400).json({
+          success: false,
+          message: 'Unexpected file field.'
+        });
+      default:
+        return res.status(400).json({
+          success: false,
+          message: `Upload error: ${error.message}`
+        });
+    }
+  }
+  
+  if (error.message === 'Unexpected end of form') {
+    return res.status(400).json({
+      success: false,
+      message: 'Upload interrupted or form data corrupted. Please try again.'
+    });
+  }
+  
+  return res.status(400).json({
+    success: false,
+    message: error.message || 'Upload failed'
+  });
+};
+
 module.exports = {
-  uploadNewspaper: [upload.single('pdf'), uploadNewspaper],
+  uploadNewspaper: [upload.single('pdf'), handleMulterError, uploadNewspaper],
   getLatestNewspaper,
   getNewspaperByDate,
   getAvailableDates,
   getNewspaperByPagination,
   deleteNewspaper,
   getNewspapersIncludeFuture,
-  uploadImage: [imageUpload.single('image'), uploadImage]
+  uploadImage: [imageUpload.single('image'), handleMulterError, uploadImage]
 };
