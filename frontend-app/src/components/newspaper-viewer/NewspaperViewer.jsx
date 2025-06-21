@@ -499,17 +499,17 @@ export default function NewspaperViewer() {
 	const uploadImage = async (blob) => {
 		try {
 			const formData = new FormData();
-			formData.append('image', blob, `newspaper-clip-${selectedDate}.jpg`);
+			formData.append('file', blob, `newspaper-clip-${selectedDate}.jpg`);
 
 			try {
-				const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/newspaper/upload`, {
+				const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/image/upload`, {
 					method: 'POST',
 					body: formData
 				});
 
 				if (!response.ok) throw new Error(`Upload failed with status: ${response.status}`);
 				const data = await response.json();
-				return data.url;
+				return data.publicUrl;
 			} catch (uploadError) {
 				console.error('Error uploading image, using local URL instead:', uploadError);
 				// Return a local blob URL if server upload fails

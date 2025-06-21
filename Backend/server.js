@@ -9,6 +9,7 @@ const newspaperRoute = require("./route/newspaperRoutes.js");
 const navlinkRoute = require("./route/navlinkRoutes.js");
 const HeadLineRoute = require("./route/headLineRoutes.js");
 const logoRoutes = require('./route/logoRoutes.js');
+const uploadRoutes = require("./route/uploadRoutes.js")
 const { createDefaultAdmin } = require("./controller/userController.js")
 const setupNewspaperPublishing = require("./utils/cron.js");
 
@@ -33,6 +34,8 @@ app.use("/navlink", navlinkRoute);
 app.use("/headline", HeadLineRoute);
 
 app.use('/logo', logoRoutes);
+
+app.use("/image", uploadRoutes);
 
 app.listen(port, async () => {
   console.log(`Server Started on port ${port}`);
