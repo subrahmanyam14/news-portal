@@ -374,7 +374,7 @@ export default function ImageViewer({
               width={window.innerWidth}
               height={(window.innerWidth * 3) / 2}
               size="stretch"
-              minWidth={window.innerWidth}
+              minWidth={window.innerWidth - 100}
               maxWidth={window.innerWidth}
               minHeight={400}
               maxHeight={window.innerHeight * 0.8}
@@ -386,10 +386,10 @@ export default function ImageViewer({
               mobileScrollSupport={true}
               onFlip={handlePageFlip}
               className="newspaper-book"
-              style={{ backgroundColor: "transparent" }}
+              style={{ backgroundColor: "black" }}
               startZIndex={10}
               autoSize={true}
-              maxShadowOpacity={0.5}
+              maxShadowOpacity={1.2}
               showPageCorners={true}
               disableFlipByClick={true}  // <- Change to true to disable clicking to flip
             >

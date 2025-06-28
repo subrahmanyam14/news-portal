@@ -3,7 +3,7 @@ import { ZoomIn, ZoomOut, Maximize, Minimize } from "lucide-react";
 
 export default function ZoomModal({ activeImage, clickPosition, onClose }) {
   // Set a higher initial zoom when a click position is provided
-  const initialZoomLevel = clickPosition ? 200 : 50;
+  const initialZoomLevel = clickPosition ? 100 : 50;
   
   const [zoomLevel, setZoomLevel] = useState(initialZoomLevel);
   const [isDragging, setIsDragging] = useState(false);
@@ -77,8 +77,8 @@ export default function ZoomModal({ activeImage, clickPosition, onClose }) {
       setPosition({ x: 0, y: 0 });
       setIsZoomedIn(false);
     } else {
-      // Zoom in to preset level (200% or max zoom / 2)
-      const zoomTarget = Math.min(200, calculateMaxZoom());
+      // Zoom in to preset level (100% or max zoom / 2)
+      const zoomTarget = Math.min(100, calculateMaxZoom());
       const centerX = containerRef.current ? containerRef.current.clientWidth / 2 : 0;
       const centerY = containerRef.current ? containerRef.current.clientHeight / 2 : 0;
       zoomToPoint(

@@ -107,8 +107,8 @@ const Navbar = () => {
 
   const handleNavigation = (path, isExternal) => {
     if (isExternal) {
-      // Open external links in new tab
-      window.open(path, '_blank', 'noopener,noreferrer');
+      // Navigate to external links in the same tab
+      window.location.href = path;
     } else {
       // Use react-router for internal navigation
       navigate(path);
