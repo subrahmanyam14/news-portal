@@ -265,23 +265,34 @@ const resetPassword = async (req, res) => {
 // Create Default Admin (Run once at startup)
 const createDefaultAdmin = async () => {
   try {
-    const adminExists = await UserDetails.findOne({ role: "superadmin" });
+    const { ADMIN_EMAIL, ADMIN_PASSWORD } = process.env;
+
+    if (!ADMIN_EMAIL || !ADMIN_PASSWORD) {
+      console.error("ADMIN_EMAIL or ADMIN_PASSWORD not set in environment.");
+      return;
+    }
+
+    const adminExists = await UserDetails.findOne({ email: ADMIN_EMAIL });
+
     if (!adminExists) {
       const admin = new UserDetails({
         fullname: "Admin User",
-        email: process.env.ADMIN_EMAIL || "admin@eportal.com",
-        password: process.env.ADMIN_PASSWORD || "admin123",
+        email: ADMIN_EMAIL,
+        password: ADMIN_PASSWORD,
         role: "superadmin",
         permissions: ["newspaper_management", "navigation_management", "headlines_management"]
       });
 
       await admin.save();
-      console.log("Default admin created successfully");
+      console.log("✅ Default admin created successfully");
+    } else {
+      console.log("ℹ️ Admin user already exists");
     }
   } catch (error) {
-    console.error("Error creating default admin:", error);
+    console.error("❌ Error creating default admin:", error);
   }
 };
+
 
 module.exports = {
   auth,

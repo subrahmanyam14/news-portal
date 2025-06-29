@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef  } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import DatePicker from 'react-datepicker';
@@ -590,57 +590,142 @@ const Dashboard = () => {
   };
 
   // Edit Link Modal Component
-  const EditLinkModal = () => {
-    if (!isEditModalOpen || !editingLink) return null;
+const EditLinkModal = () => {
+  const nameInputRef = useRef(null);
+  const modalRef = useRef(null);
+  const hasAutoFocused = useRef(false);
+  const focusTimeout = useRef(null);
+  const previousModalState = useRef(false);
 
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg p-6 w-full max-w-md">
-          <h3 className="text-xl font-semibold mb-4 text-gray-800">Edit Navigation Link</h3>
+  // Clean up timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (focusTimeout.current) {
+        clearTimeout(focusTimeout.current);
+      }
+    };
+  }, []);
 
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-            <input
-              type="text"
-              value={editingLink.name}
-              onChange={(e) => setEditingLink({ ...editingLink, name: e.target.value })}
-              className="w-full border border-gray-300 bg-white text-gray-800 rounded p-2 focus:border-[#403fbb] focus:outline-none"
-              placeholder="Link name"
-            />
-          </div>
+  // Handle auto-focus when modal opens (only on initial open)
+  useEffect(() => {
+    // Only auto-focus when modal transitions from closed to open
+    const modalJustOpened = isEditModalOpen && !previousModalState.current;
+    
+    if (modalJustOpened && nameInputRef.current && !hasAutoFocused.current) {
+      focusTimeout.current = setTimeout(() => {
+        nameInputRef.current?.focus();
+        hasAutoFocused.current = true;
+      }, 100);
+    }
 
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Path</label>
-            <input
-              type="text"
-              value={editingLink.path}
-              onChange={(e) => setEditingLink({ ...editingLink, path: e.target.value })}
-              className="w-full border border-gray-300 bg-white text-gray-800 rounded p-2 focus:border-[#403fbb] focus:outline-none"
-              placeholder="/path"
-            />
-          </div>
+    // Update previous state
+    previousModalState.current = isEditModalOpen;
 
-          <div className="flex justify-end space-x-3">
-            <button
-              onClick={() => {
-                setIsEditModalOpen(false);
-                setEditingLink(null);
-              }}
-              className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleUpdateLink}
-              className="px-4 py-2 bg-[#403fbb] text-white rounded hover:bg-[#5756c5] transition-colors"
-            >
-              Update Link
-            </button>
-          </div>
+    // Reset focus flag when modal closes
+    if (!isEditModalOpen) {
+      hasAutoFocused.current = false;
+    }
+  }, [isEditModalOpen]);
+
+  // Handle click outside to close modal
+  const handleModalClick = (e) => {
+    if (modalRef.current && modalRef.current === e.target) {
+      closeModal();
+    }
+  };
+
+  // Handle escape key
+  useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === 'Escape' && isEditModalOpen) {
+        closeModal();
+      }
+    };
+
+    if (isEditModalOpen) {
+      document.addEventListener('keydown', handleEscape);
+      document.body.style.overflow = 'hidden';
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleEscape);
+      document.body.style.overflow = 'unset';
+    };
+  }, [isEditModalOpen]);
+
+  const closeModal = () => {
+    setIsEditModalOpen(false);
+    setEditingLink(null);
+  };
+
+  const handleNameChange = (e) => {
+    setEditingLink(prev => ({ ...prev, name: e.target.value }));
+  };
+
+  const handlePathChange = (e) => {
+    setEditingLink(prev => ({ ...prev, path: e.target.value }));
+  };
+
+  if (!isEditModalOpen || !editingLink) return null;
+
+  return (
+    <div 
+      ref={modalRef}
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+      onClick={handleModalClick}
+    >
+      <div 
+        className="bg-white rounded-lg p-6 w-full max-w-md"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="text-xl font-semibold mb-4 text-gray-800">Edit Navigation Link</h3>
+
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+          <input
+            ref={nameInputRef}
+            type="text"
+            value={editingLink.name || ''}
+            onChange={handleNameChange}
+            className="w-full border border-gray-300 bg-white text-gray-800 rounded p-2 focus:border-[#403fbb] focus:outline-none focus:ring-1 focus:ring-[#403fbb]"
+            placeholder="Link name"
+            autoComplete="off"
+          />
+        </div>
+
+        <div className="mb-6">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Path</label>
+          <input
+            type="text"
+            value={editingLink.path || ''}
+            onChange={handlePathChange}
+            className="w-full border border-gray-300 bg-white text-gray-800 rounded p-2 focus:border-[#403fbb] focus:outline-none focus:ring-1 focus:ring-[#403fbb]"
+            placeholder="/path"
+            autoComplete="off"
+          />
+        </div>
+
+        <div className="flex justify-end space-x-3">
+          <button
+            type="button"
+            onClick={closeModal}
+            className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleUpdateLink}
+            className="px-4 py-2 bg-[#403fbb] text-white rounded hover:bg-[#5756c5] transition-colors focus:outline-none focus:ring-2 focus:ring-[#403fbb]"
+          >
+            Update Link
+          </button>
         </div>
       </div>
-    );
-  };
+    </div>
+  );
+};
+
 
   // Headline Edit Modal Component
   const HeadlineEditModal = () => {
