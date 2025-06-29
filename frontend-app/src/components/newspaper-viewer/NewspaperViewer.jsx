@@ -259,37 +259,17 @@ export default function NewspaperViewer() {
 	const nextImage = () => {
 		if (!activeImage || !images.length || isFlipping) return;
 		const nextImg = images[(activeImage.id % images.length)];
-
-		setNoTransition(false);
 		setFlipDirection('left');
 		setNextImageToShow(nextImg);
-		setIsFlipping(true);
-
-		// Increase the timeout to ensure the animation has time to complete
-		setTimeout(() => {
-			setNoTransition(true);
-			setIsFlipping(false);
-			setActiveImage(nextImg);
-			setTimeout(() => setNoTransition(false), 50);
-		}, 1000); // Match this to the flippingTime in HTMLFlipBook
 	};
 
 	// In NewspaperViewer.jsx - Update prevImage function similarly
 	const prevImage = () => {
 		if (!activeImage || !images.length || isFlipping) return;
 		const prevImg = images[(activeImage.id - 2 + images.length) % images.length];
-
-		setNoTransition(false);
 		setFlipDirection('right');
 		setNextImageToShow(prevImg);
-		setIsFlipping(true);
-
-		setTimeout(() => {
-			setNoTransition(true);
-			setIsFlipping(false);
-			setActiveImage(prevImg);
-			setTimeout(() => setNoTransition(false), 50);
-		}, 1000); // Match this to the flippingTime in HTMLFlipBook
+		setActiveImage(prevImg);
 	};
 
 	const goToPage = (pageNum) => {
@@ -305,14 +285,8 @@ export default function NewspaperViewer() {
 			const direction = pageNum > activeImage.id ? 'left' : 'right';
 			setFlipDirection(direction);
 			setNextImageToShow(targetImage);
-			setIsFlipping(true);
-
-			setTimeout(() => {
-				setNoTransition(true);
-				setIsFlipping(false);
-				setActiveImage(targetImage);
-				setTimeout(() => setNoTransition(false), 50);
-			}, 600);
+			setIsFlipping(false);
+			setActiveImage(targetImage);
 		}
 	};
 
@@ -711,6 +685,7 @@ export default function NewspaperViewer() {
 							isClipping={isClipping}
 							onPrevImage={prevImage}
 							onNextImage={nextImage}
+							onPageChange={goToPage}
 							images={images}
 							onZoomClick={(image, clickPosition) => {
 								setIsZoomed(true);

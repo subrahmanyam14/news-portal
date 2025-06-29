@@ -12,6 +12,7 @@ export default function ImageViewer({
   isClipping,
   onPrevImage,
   onNextImage,
+  onPageChange, // Add this new prop
   images,
   onZoomClick,
   clipBox,
@@ -28,9 +29,38 @@ export default function ImageViewer({
   const [currentPage, setCurrentPage] = useState(0);
   const [resizing, setResizing] = useState(null);
   const [startTouch, setStartTouch] = useState(null);
+  const [isMobile, setIsMobile] = useState(false);
+  const [imageDimensions, setImageDimensions] = useState(null);
 
   // Track the last external page change via activeImage
   const lastActiveImageIdRef = useRef(null);
+
+  // Check if device is mobile
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768); // md breakpoint
+    };
+
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // Load image dimensions when activeImage changes
+  useEffect(() => {
+    if (activeImage && activeImage.src) {
+      const img = new Image();
+      img.onload = () => {
+        setImageDimensions({
+          width: img.naturalWidth,
+          height: img.naturalHeight,
+          aspectRatio: img.naturalWidth / img.naturalHeight
+        });
+      };
+      img.src = activeImage.src;
+    }
+  }, [activeImage]);
 
   useEffect(() => {
     // Only update the book if activeImage changed externally (not from a flip)
@@ -159,63 +189,54 @@ export default function ImageViewer({
       // Update local state 
       setCurrentPage(newPage);
 
-      // Notify parent about the change via callbacks
-      if (newPage > currentPage) {
-        onNextImage();
-      } else if (newPage < currentPage) {
+      // Update parent's activeImage using the simpler onPageChange callback
+      const newActiveImage = images[newPage];
+      if (onPageChange && newActiveImage && newActiveImage.id !== activeImage?.id) {
+        onPageChange(newActiveImage.id);
+      }
+    }
+  };
+
+  const handleNextClick = () => {
+    if (!isFlipping && !isClipping && bookRef.current && bookRef.current.pageFlip) {
+      try {
+        const pageFlip = bookRef.current.pageFlip();
+        if (pageFlip && typeof pageFlip.flipNext === 'function') {
+          // Only trigger the visual flip, don't call parent's nextImage
+          pageFlip.flipNext();
+        }
+      } catch (error) {
+        console.log("Could not flip next", error);
+      }
+    }
+  };
+
+  const handlePrevClick = () => {
+    if (!isFlipping && !isClipping && bookRef.current && bookRef.current.pageFlip) {
+
+      if (isMobile) {
         onPrevImage();
       }
-    }
-  };
-
-  // In ImageViewer.jsx - Update handleNextClick function
-  const handleNextClick = () => {
-    if (!isFlipping && !isClipping) {
-      // Manually trigger the animation through the parent component
-      onNextImage();
-
-      // Use the PageFlip API to trigger the visual animation
-      if (bookRef.current && bookRef.current.pageFlip) {
-        try {
-          const pageFlip = bookRef.current.pageFlip();
-          if (pageFlip && typeof pageFlip.flipNext === 'function') {
-            pageFlip.flipNext();
-          }
-        } catch (error) {
-          console.log("Could not flip next", error);
+      try {
+        const pageFlip = bookRef.current.pageFlip();
+        if (pageFlip && typeof pageFlip.flipPrev === 'function') {
+          // Only trigger the visual flip, don't call parent's prevImage
+          pageFlip.flipPrev();
         }
-      }
-    }
-  };
-
-  // In ImageViewer.jsx - Update handlePrevClick function
-  const handlePrevClick = () => {
-    if (!isFlipping && !isClipping) {
-      // Manually trigger the animation through the parent component
-      onPrevImage();
-
-      // Use the PageFlip API to trigger the visual animation
-      if (bookRef.current && bookRef.current.pageFlip) {
-        try {
-          const pageFlip = bookRef.current.pageFlip();
-          if (pageFlip && typeof pageFlip.flipPrev === 'function') {
-            pageFlip.flipPrev();
-          }
-        } catch (error) {
-          console.log("Could not flip prev", error);
-        }
+      } catch (error) {
+        console.log("Could not flip prev", error);
       }
     }
   };
 
   const renderPages = () => {
     return images.map((image, index) => (
-      <div key={index} className="page">
-        <div className="page-content w-full h-full flex items-center justify-center">
+      <div key={index} className="page w-full h-full">
+        <div className="page-content w-full h-full flex items-center justify-center p-0 m-0 overflow-hidden">
           <img
             src={image.src}
             alt={`Page ${image.id}`}
-            className="w-full h-full object-contain cursor-zoom-in"
+            className="w-full h-full object-contain cursor-zoom-in block"
             onClick={(e) => {
               e.stopPropagation(); // Stop event bubbling
 
@@ -230,17 +251,123 @@ export default function ImageViewer({
 
               onZoomClick(image, { percentX, percentY }); // Pass image and click position
             }}
-            style={{ maxHeight: '100%' }}
+            style={{
+              maxHeight: 'none',
+              maxWidth: 'none',
+              width: '100%',
+              height: '100%',
+              margin: 0,
+              padding: 0,
+              display: 'block',
+              objectFit: 'contain'
+            }}
           />
         </div>
       </div>
     ));
   };
 
+  // Calculate flipbook dimensions based on scaling ratio
+  const getFlipBookDimensions = () => {
+    const screenWidth = window.innerWidth;
+    const screenHeight = window.innerHeight;
+    const availableHeight = screenHeight - 100; // Leave some margin for UI elements
+
+    if (!imageDimensions) {
+      // Fallback dimensions while image is loading
+      if (isMobile) {
+        return {
+          width: screenWidth - 20,
+          height: availableHeight * 0.8,
+        };
+      } else {
+        return {
+          width: screenWidth - 680,
+          height: availableHeight * 1.8,
+        };
+      }
+    }
+
+    const { width: imageWidth, height: imageHeight } = imageDimensions;
+
+    if (isMobile) {
+      // Mobile: single page, calculate ratio based on screen width
+      const availableWidth = screenWidth - 40; // Small margin on both sides
+      const widthRatio = availableWidth / imageWidth;
+
+      const scaledWidth = imageWidth * widthRatio;
+      const scaledHeight = imageHeight * widthRatio;
+
+      // Ensure height doesn't exceed available space
+      if (scaledHeight > availableHeight) {
+        const heightRatio = availableHeight / imageHeight;
+        const finalWidth = imageWidth * heightRatio;
+        const finalHeight = imageHeight * heightRatio;
+
+        return {
+          width: finalWidth,
+          height: finalHeight,
+          minWidth: finalWidth,
+          maxWidth: finalWidth,
+          minHeight: finalHeight,
+          maxHeight: finalHeight
+        };
+      }
+
+      return {
+        width: scaledWidth,
+        height: scaledHeight,
+        minWidth: scaledWidth,
+        maxWidth: scaledWidth,
+        minHeight: scaledHeight,
+        maxHeight: scaledHeight
+      };
+    } else {
+      // Desktop: two pages side by side, each page gets half the available width
+      const availableWidth = screenWidth - 200; // Space for navigation buttons
+      const singlePageWidth = availableWidth / 2; // Each page gets half
+
+      // Calculate ratio based on single page width to image width
+      const widthRatio = singlePageWidth / imageWidth;
+
+      const scaledPageWidth = imageWidth * widthRatio;
+      const scaledHeight = imageHeight * widthRatio;
+      const totalWidth = scaledPageWidth * 2; // Two pages side by side
+
+      // Ensure height doesn't exceed available space
+      if (scaledHeight > availableHeight) {
+        const heightRatio = availableHeight / imageHeight;
+        const finalPageWidth = imageWidth * heightRatio;
+        const finalHeight = imageHeight * heightRatio;
+        const finalTotalWidth = finalPageWidth * 2;
+
+        return {
+          width: finalTotalWidth,
+          height: finalHeight,
+          minWidth: finalTotalWidth,
+          maxWidth: finalTotalWidth,
+          minHeight: finalHeight,
+          maxHeight: finalHeight
+        };
+      }
+
+      return {
+        width: totalWidth,
+        height: scaledHeight,
+        minWidth: totalWidth,
+        maxWidth: totalWidth,
+        minHeight: scaledHeight,
+        maxHeight: scaledHeight
+      };
+    }
+  };
+
+  const flipBookDimensions = getFlipBookDimensions();
+
   return (
-    <div className="w-full flex flex-col justify-center items-center relative p-0">
+    <div className="w-full my-20 flex flex-col justify-center items-center relative">
       <button
-        className="absolute left-2 top-1/2 transform -translate-y-1/2 bg-gray-700 p-2 rounded-full text-white hover:bg-gray-600 disabled:opacity-50 z-10 transition-all duration-300 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:hover:bg-gray-400"
+        className="absolute left-2 md:left-4 top-1/2 transform -translate-y-1/2 bg-gray-700 p-2 rounded-full text-white hover:bg-gray-600 disabled:opacity-50 z-20 transition-all duration-300 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:hover:bg-gray-400"
         onClick={handlePrevClick}
         disabled={images.length <= 1 || isFlipping || activeImage?.id === 1 || isClipping}
         aria-label="Previous page"
@@ -248,7 +375,7 @@ export default function ImageViewer({
         <ChevronLeft size={24} />
       </button>
 
-      <div className="w-full flex justify-center items-center">
+      <div className="flex justify-center items-center" style={{ width: '100%', height: '100%' }}>
         {isClipping ? (
           <div className="relative" ref={clipContainerRef}>
             <img
@@ -368,30 +495,36 @@ export default function ImageViewer({
             </div>
           </div>
         ) : (
-          <div className="flip-book-container w-full h-full mt-0">
+          <div
+            className="flex justify-center items-center"
+          >
             <HTMLFlipBook
               ref={bookRef}
-              width={window.innerWidth}
-              height={(window.innerWidth * 3) / 2}
-              size="stretch"
-              minWidth={window.innerWidth - 100}
-              maxWidth={window.innerWidth}
-              minHeight={400}
-              maxHeight={window.innerHeight * 0.8}
+              width={flipBookDimensions.width}
+              height={flipBookDimensions.height}
+              size="fixed"
+              minWidth={flipBookDimensions.minWidth}
+              maxWidth={flipBookDimensions.maxWidth}
+              minHeight={flipBookDimensions.minHeight}
+              maxHeight={flipBookDimensions.maxHeight}
               drawShadow={true}
               flippingTime={1000}
-              usePortrait={true}
+              usePortrait={isMobile}
               startPage={activeImage ? activeImage.id - 1 : 0}
               showCover={false}
               mobileScrollSupport={true}
               onFlip={handlePageFlip}
               className="newspaper-book"
-              style={{ backgroundColor: "black" }}
+              style={{
+                backgroundColor: "transparent",
+                margin: 0,
+                padding: 0
+              }}
               startZIndex={10}
-              autoSize={true}
-              maxShadowOpacity={1.2}
-              showPageCorners={true}
-              disableFlipByClick={true}  // <- Change to true to disable clicking to flip
+              autoSize={false}
+              maxShadowOpacity={0.8}
+              showPageCorners={false}
+              disableFlipByClick={true}
             >
               {renderPages()}
             </HTMLFlipBook>
@@ -400,7 +533,7 @@ export default function ImageViewer({
       </div>
 
       <button
-        className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-gray-700 p-2 rounded-full text-white hover:bg-gray-600 disabled:opacity-50 z-10 transition-all duration-300 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:hover:bg-gray-400"
+        className="absolute right-2 md:right-4 top-1/2 transform -translate-y-1/2 bg-gray-700 p-2 rounded-full text-white hover:bg-gray-600 disabled:opacity-50 z-20 transition-all duration-300 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:hover:bg-gray-400"
         onClick={handleNextClick}
         disabled={images.length <= 1 || isFlipping || activeImage?.id === images.length || isClipping}
         aria-label="Next page"
