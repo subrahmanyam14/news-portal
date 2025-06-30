@@ -11,7 +11,7 @@ export default function ThumbnailStrip({
 	// Check if device is mobile
 	useEffect(() => {
 		const checkMobile = () => {
-			setIsMobile(window.innerWidth < 768); // md breakpoint
+			setIsMobile(window.innerWidth < 1280); // md breakpoint
 		};
 		
 		checkMobile();
