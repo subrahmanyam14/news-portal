@@ -7,38 +7,36 @@ export default function DatePicker({
 	todayDateStr,
 	onDateChange,
 	isFutureDate,
-	formatDate
+	formatDate,
+	currentMonthYear,
+	onMonthYearChange // Add this prop
 }) {
 	const [showDatePicker, setShowDatePicker] = useState(false);
-	const [currentMonthYear, setCurrentMonthYear] = useState({
-		month: new Date().getMonth() + 1,
-		year: new Date().getFullYear()
-	});
 
 	const changeMonthYear = (increment) => {
-		setCurrentMonthYear(prev => {
-			let newMonth = prev.month + increment;
-			let newYear = prev.year;
+		const newMonthYear = {
+			month: currentMonthYear.month + increment,
+			year: currentMonthYear.year
+		};
 
-			if (newMonth > 12) {
-				newMonth = 1;
-				newYear++;
-			} else if (newMonth < 1) {
-				newMonth = 12;
-				newYear--;
-			}
+		if (newMonthYear.month > 12) {
+			newMonthYear.month = 1;
+			newMonthYear.year++;
+		} else if (newMonthYear.month < 1) {
+			newMonthYear.month = 12;
+			newMonthYear.year--;
+		}
 
-			const newDate = new Date(newYear, newMonth - 1, 1);
-			newDate.setHours(0, 0, 0, 0);
-			if (newDate > new Date()) {
-				return {
-					month: new Date().getMonth() + 1,
-					year: new Date().getFullYear()
-				};
-			}
+		const newDate = new Date(newMonthYear.year, newMonthYear.month - 1, 1);
+		newDate.setHours(0, 0, 0, 0);
+		
+		// Don't allow navigation to future months
+		if (newDate > new Date()) {
+			return;
+		}
 
-			return { month: newMonth, year: newYear };
-		});
+		// Update the parent component's currentMonthYear state
+		onMonthYearChange(newMonthYear);
 	};
 
 	const handleDateSelect = (date) => {
@@ -70,13 +68,7 @@ export default function DatePicker({
 							{new Date(currentMonthYear.year, currentMonthYear.month - 1).toLocaleString('default', { month: 'long', year: 'numeric' })}
 						</span>
 						<button
-							onClick={() => {
-								const currentDate = new Date(currentMonthYear.year, currentMonthYear.month - 1, 1);
-								currentDate.setHours(0, 0, 0, 0);
-								if (currentDate < new Date()) {
-									changeMonthYear(1);
-								}
-							}}
+							onClick={() => changeMonthYear(1)}
 							className={`p-1 rounded ${new Date(currentMonthYear.year, currentMonthYear.month - 1, 1) >= new Date() ? 'text-gray-500 cursor-not-allowed' : 'hover:bg-gray-600'}`}
 							disabled={new Date(currentMonthYear.year, currentMonthYear.month - 1, 1) >= new Date()}
 						>

@@ -704,7 +704,7 @@ export default function NewspaperViewer() {
 					isFutureDate={isFutureDate}
 					formatDate={formatDate}
 					currentMonthYear={currentMonthYear}
-					changeMonthYear={changeMonthYear}
+					onMonthYearChange={setCurrentMonthYear} // Add this line
 				/>
 
 				<PageSelector
