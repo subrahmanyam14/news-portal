@@ -30,7 +30,7 @@ export default function ImageViewer({
   const [resizing, setResizing] = useState(null);
   const [startTouch, setStartTouch] = useState(null);
   const [isMobile, setIsMobile] = useState(false);
-  const [imageDimensions, setImageDimensions] = useState(null);
+  const [imageDimensions, setImageDimensions] = useState(null);  
 
   // Track the last external page change via activeImage
   const lastActiveImageIdRef = useRef(null);
@@ -38,7 +38,7 @@ export default function ImageViewer({
   // Check if device is mobile
   useEffect(() => {
     const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768); // md breakpoint
+      setIsMobile(window.innerWidth < 1280); // md breakpoint
     };
 
     checkMobile();
@@ -461,12 +461,31 @@ export default function ImageViewer({
     return (
       <div className="w-full my-20 flex flex-col justify-center items-center relative">
         <div className="relative" ref={clipContainerRef}>
-          <img
-            src={activeImage.src}
-            alt={`Page ${activeImage.id}`}
-            className="shadow-lg border-2 border-gray-400 max-h-[70vh] object-contain"
-            ref={clipImageRef}
-          />
+          {isMobile ? (
+            // Mobile - single image
+            <img
+              src={activeImage.src}
+              alt={`Page ${activeImage.id}`}
+              className="shadow-lg border-2 border-gray-400 max-h-[70vh] object-contain"
+              ref={clipImageRef}
+            />
+          ) : (
+            // Desktop - two images side by side
+            <div className="flex justify-center items-start">
+              <img
+                src={activeImage.src}
+                alt={`Current page ${activeImage.id}`}
+                className="shadow-lg border-2 border-gray-400 max-h-[70vh] object-contain"
+                style={{ width: '50%' }}
+              />
+              <img
+                src={nextImageToShow?.src}
+                alt={`Next page ${nextImageToShow?.id}`}
+                className="shadow-lg border-2 border-gray-400 max-h-[70vh] object-contain"
+                style={{ width: '50%' }}
+              />
+            </div>
+          )}
 
           <div className="absolute inset-0 bg-black bg-opacity-70">
             <div
@@ -511,9 +530,9 @@ export default function ImageViewer({
         <ChevronLeft size={24} />
       </button>
 
-      <div 
-        className="flex justify-center items-center relative" 
-        style={{ width: '100%', height: '100%' }} 
+      <div
+        className="flex justify-center items-center relative"
+        style={{ width: '100%', height: '100%' }}
         ref={clipContainerRef}
       >
         {/* Desktop clipping overlay - covers the entire flipbook */}

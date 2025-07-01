@@ -89,6 +89,19 @@ export default function NewspaperViewer() {
 	const [youtubeLink, setYoutubeLink] = useState(null);
 	const [zoomedImage, setZoomedImage] = useState(null);
 	const [clickPosition, setClickPosition] = useState(null);
+	const [isMobile, setIsMobile] = useState(false);
+
+	// Check if device is mobile
+	useEffect(() => {
+		const checkMobile = () => {
+			setIsMobile(window.innerWidth < 1280); // md breakpoint
+		};
+
+		checkMobile();
+		window.addEventListener('resize', checkMobile);
+
+		return () => window.removeEventListener('resize', checkMobile);
+	}, []);
 
 	// Helper function to format date as YYYY-MM-DD
 	const formatDate = (date) => {
@@ -495,65 +508,130 @@ export default function NewspaperViewer() {
 		}
 	};
 
+	useEffect(() => {
+		if (!activeImage) return;
+		const nextImg = images.find(img => img.id === activeImage.id + 1);
+		setNextImageToShow(nextImg || null); // Explicitly set to null if no next image
+	}, [activeImage, images]);
+
 	const handleClippedImage = async (action) => {
 		if (!activeImage || !clipContainerRef.current) return;
 		setClipImageLoading(true);
 
 		try {
-			// Create an offscreen canvas
 			const canvas = document.createElement('canvas');
 			const ctx = canvas.getContext('2d');
 
-			// Create a new image for drawing to canvas
-			const img = new Image();
-			img.crossOrigin = 'Anonymous';
+			if (isMobile) {
+				// Mobile - single image clipping
+				const img = new Image();
+				img.crossOrigin = 'Anonymous';
 
-			// Load the image
-			await new Promise((resolve, reject) => {
-				img.onload = resolve;
-				img.onerror = reject;
-				img.src = activeImage.src;
-			});
+				await new Promise((resolve, reject) => {
+					img.onload = resolve;
+					img.onerror = reject;
+					img.src = activeImage.src;
+				});
 
-			// Get the original image dimensions
-			const imgWidth = img.naturalWidth;
-			const imgHeight = img.naturalHeight;
+				const imgWidth = img.naturalWidth;
+				const imgHeight = img.naturalHeight;
+				const containerRect = clipContainerRef.current.getBoundingClientRect();
+				const scaleX = imgWidth / containerRect.width;
+				const scaleY = imgHeight / containerRect.height;
 
-			// Get the clip container dimensions
-			const containerRect = clipContainerRef.current.getBoundingClientRect();
+				const actualX = clipBox.x * scaleX;
+				const actualY = clipBox.y * scaleY;
+				const actualWidth = clipBox.width * scaleX;
+				const actualHeight = clipBox.height * scaleY;
 
-			// Calculate the scaling factors between the displayed image and the original image
-			const displayedWidth = containerRect.width;
-			const displayedHeight = containerRect.height;
+				canvas.width = actualWidth;
+				canvas.height = actualHeight;
 
-			// Calculate scale factors (use the minimum to maintain aspect ratio)
-			const scaleX = imgWidth / displayedWidth;
-			const scaleY = imgHeight / displayedHeight;
+				ctx.drawImage(
+					img,
+					actualX, actualY, actualWidth, actualHeight,
+					0, 0, actualWidth, actualHeight
+				);
+			} else {
+				// Desktop - two images clipping
+				const containerRect = clipContainerRef.current.getBoundingClientRect();
+				const singleImageWidth = containerRect.width / 2;
 
-			// Calculate the actual clip dimensions in the original image
-			const actualX = clipBox.x * scaleX;
-			const actualY = clipBox.y * scaleY;
-			const actualWidth = clipBox.width * scaleX;
-			const actualHeight = clipBox.height * scaleY;
+				// Load both images with distinct sources
+				const leftImg = new Image();
+				const rightImg = new Image();
+				leftImg.crossOrigin = 'Anonymous';
+				rightImg.crossOrigin = 'Anonymous';
 
-			// Set the canvas dimensions to the clipped area size
-			canvas.width = actualWidth;
-			canvas.height = actualHeight;
+				await Promise.all([
+					new Promise((resolve) => {
+						leftImg.onload = resolve;
+						leftImg.src = activeImage.src;
+					}),
+					new Promise((resolve) => {
+						rightImg.onload = resolve;
+						rightImg.src = nextImageToShow?.src || activeImage.src;
+					})
+				]);
 
-			// Draw only the clipped portion of the image
-			ctx.drawImage(
-				img,
-				actualX, actualY, actualWidth, actualHeight, // source rectangle
-				0, 0, actualWidth, actualHeight              // destination rectangle
-			);
+				// Debug output
+				console.log('Left image src:', leftImg.src);
+				console.log('Right image src:', rightImg.src);
+				console.assert(leftImg.src !== rightImg.src, 'Images should be different!');
 
-			// Get the blob from the canvas
+				// Set canvas dimensions
+				canvas.width = clipBox.width;
+				canvas.height = clipBox.height;
+				ctx.fillStyle = 'white';
+				ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+				// Calculate which parts to draw
+				const clipLeft = Math.max(0, clipBox.x);
+				const clipRight = Math.min(containerRect.width, clipBox.x + clipBox.width);
+				const leftClipWidth = Math.min(singleImageWidth - clipLeft, clipBox.width);
+				const rightClipWidth = clipBox.width - leftClipWidth;
+
+				// Draw left portion if needed
+				if (leftClipWidth > 0) {
+					const scaleX = leftImg.naturalWidth / singleImageWidth;
+					const scaleY = leftImg.naturalHeight / containerRect.height;
+
+					ctx.drawImage(
+						leftImg,
+						clipLeft * scaleX,
+						clipBox.y * scaleY,
+						leftClipWidth * scaleX,
+						clipBox.height * scaleY,
+						0, 0,
+						leftClipWidth,
+						clipBox.height
+					);
+				}
+
+				// Draw right portion if needed
+				if (rightClipWidth > 0) {
+					const scaleX = rightImg.naturalWidth / singleImageWidth;
+					const scaleY = rightImg.naturalHeight / containerRect.height;
+					const rightClipX = Math.max(0, clipBox.x - singleImageWidth);
+
+					ctx.drawImage(
+						rightImg,
+						rightClipX * scaleX,
+						clipBox.y * scaleY,
+						rightClipWidth * scaleX,
+						clipBox.height * scaleY,
+						leftClipWidth, 0,
+						rightClipWidth,
+						clipBox.height
+					);
+				}
+			}
+			// Rest of your existing code for handling the blob
 			const blob = await new Promise(resolve => {
 				canvas.toBlob(resolve, 'image/jpeg', 0.9);
 			});
 
 			if (action === 'download') {
-				// Handle download
 				const url = URL.createObjectURL(blob);
 				const link = document.createElement('a');
 				link.href = url;
@@ -564,11 +642,8 @@ export default function NewspaperViewer() {
 				URL.revokeObjectURL(url);
 			}
 			else if (action === 'facebook' || action === 'whatsapp') {
-				// For sharing, upload the image first to get a public URL
 				try {
 					const publicImageUrl = await uploadImage(blob);
-
-					// Then open the appropriate sharing link
 					if (action === 'facebook') {
 						window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(publicImageUrl)}`, '_blank');
 					} else if (action === 'whatsapp') {
@@ -678,7 +753,7 @@ export default function NewspaperViewer() {
 						<ImageViewer
 							clipContainerRef={clipContainerRef}
 							activeImage={activeImage}
-							nextImageToShow={nextImageToShow}
+							nextImageToShow={images[activeImage.id]}
 							isFlipping={isFlipping}
 							flipDirection={flipDirection}
 							noTransition={noTransition}
