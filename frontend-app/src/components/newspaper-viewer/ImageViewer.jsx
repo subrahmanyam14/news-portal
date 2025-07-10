@@ -38,7 +38,7 @@ export default function ImageViewer({
   // Check if device is mobile
   useEffect(() => {
     const checkMobile = () => {
-      setIsMobile(window.innerWidth < 1280); // md breakpoint
+      setIsMobile(window.innerWidth < 1080); // md breakpoint
     };
 
     checkMobile();
