@@ -522,7 +522,7 @@ export default function NewspaperViewer() {
 			const canvas = document.createElement('canvas');
 			const ctx = canvas.getContext('2d');
 
-			if (isMobile) {
+			// if (isMobile) {
 				// Mobile - single image clipping
 				const img = new Image();
 				img.crossOrigin = 'Anonymous';
@@ -552,80 +552,80 @@ export default function NewspaperViewer() {
 					actualX, actualY, actualWidth, actualHeight,
 					0, 0, actualWidth, actualHeight
 				);
-			} else {
-				// Desktop - two images clipping
-				const containerRect = clipContainerRef.current.getBoundingClientRect();
-				const singleImageWidth = containerRect.width / 2;
+			// } else {
+			// 	// Desktop - two images clipping
+			// 	const containerRect = clipContainerRef.current.getBoundingClientRect();
+			// 	const singleImageWidth = containerRect.width / 2;
 
-				// Load both images with distinct sources
-				const leftImg = new Image();
-				const rightImg = new Image();
-				leftImg.crossOrigin = 'Anonymous';
-				rightImg.crossOrigin = 'Anonymous';
+			// 	// Load both images with distinct sources
+			// 	const leftImg = new Image();
+			// 	const rightImg = new Image();
+			// 	leftImg.crossOrigin = 'Anonymous';
+			// 	rightImg.crossOrigin = 'Anonymous';
 
-				await Promise.all([
-					new Promise((resolve) => {
-						leftImg.onload = resolve;
-						leftImg.src = activeImage.src;
-					}),
-					new Promise((resolve) => {
-						rightImg.onload = resolve;
-						rightImg.src = nextImageToShow?.src || activeImage.src;
-					})
-				]);
+			// 	await Promise.all([
+			// 		new Promise((resolve) => {
+			// 			leftImg.onload = resolve;
+			// 			leftImg.src = activeImage.src;
+			// 		}),
+			// 		new Promise((resolve) => {
+			// 			rightImg.onload = resolve;
+			// 			rightImg.src = nextImageToShow?.src || activeImage.src;
+			// 		})
+			// 	]);
 
-				// Debug output
-				console.log('Left image src:', leftImg.src);
-				console.log('Right image src:', rightImg.src);
-				console.assert(leftImg.src !== rightImg.src, 'Images should be different!');
+			// 	// Debug output
+			// 	console.log('Left image src:', leftImg.src);
+			// 	console.log('Right image src:', rightImg.src);
+			// 	console.assert(leftImg.src !== rightImg.src, 'Images should be different!');
 
-				// Set canvas dimensions
-				canvas.width = clipBox.width;
-				canvas.height = clipBox.height;
-				ctx.fillStyle = 'white';
-				ctx.fillRect(0, 0, canvas.width, canvas.height);
+			// 	// Set canvas dimensions
+			// 	canvas.width = clipBox.width;
+			// 	canvas.height = clipBox.height;
+			// 	ctx.fillStyle = 'white';
+			// 	ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-				// Calculate which parts to draw
-				const clipLeft = Math.max(0, clipBox.x);
-				const clipRight = Math.min(containerRect.width, clipBox.x + clipBox.width);
-				const leftClipWidth = Math.min(singleImageWidth - clipLeft, clipBox.width);
-				const rightClipWidth = clipBox.width - leftClipWidth;
+			// 	// Calculate which parts to draw
+			// 	const clipLeft = Math.max(0, clipBox.x);
+			// 	const clipRight = Math.min(containerRect.width, clipBox.x + clipBox.width);
+			// 	const leftClipWidth = Math.min(singleImageWidth - clipLeft, clipBox.width);
+			// 	const rightClipWidth = clipBox.width - leftClipWidth;
 
-				// Draw left portion if needed
-				if (leftClipWidth > 0) {
-					const scaleX = leftImg.naturalWidth / singleImageWidth;
-					const scaleY = leftImg.naturalHeight / containerRect.height;
+			// 	// Draw left portion if needed
+			// 	if (leftClipWidth > 0) {
+			// 		const scaleX = leftImg.naturalWidth / singleImageWidth;
+			// 		const scaleY = leftImg.naturalHeight / containerRect.height;
 
-					ctx.drawImage(
-						leftImg,
-						clipLeft * scaleX,
-						clipBox.y * scaleY,
-						leftClipWidth * scaleX,
-						clipBox.height * scaleY,
-						0, 0,
-						leftClipWidth,
-						clipBox.height
-					);
-				}
+			// 		ctx.drawImage(
+			// 			leftImg,
+			// 			clipLeft * scaleX,
+			// 			clipBox.y * scaleY,
+			// 			leftClipWidth * scaleX,
+			// 			clipBox.height * scaleY,
+			// 			0, 0,
+			// 			leftClipWidth,
+			// 			clipBox.height
+			// 		);
+			// 	}
 
-				// Draw right portion if needed
-				if (rightClipWidth > 0) {
-					const scaleX = rightImg.naturalWidth / singleImageWidth;
-					const scaleY = rightImg.naturalHeight / containerRect.height;
-					const rightClipX = Math.max(0, clipBox.x - singleImageWidth);
+			// 	// Draw right portion if needed
+			// 	if (rightClipWidth > 0) {
+			// 		const scaleX = rightImg.naturalWidth / singleImageWidth;
+			// 		const scaleY = rightImg.naturalHeight / containerRect.height;
+			// 		const rightClipX = Math.max(0, clipBox.x - singleImageWidth);
 
-					ctx.drawImage(
-						rightImg,
-						rightClipX * scaleX,
-						clipBox.y * scaleY,
-						rightClipWidth * scaleX,
-						clipBox.height * scaleY,
-						leftClipWidth, 0,
-						rightClipWidth,
-						clipBox.height
-					);
-				}
-			}
+			// 		ctx.drawImage(
+			// 			rightImg,
+			// 			rightClipX * scaleX,
+			// 			clipBox.y * scaleY,
+			// 			rightClipWidth * scaleX,
+			// 			clipBox.height * scaleY,
+			// 			leftClipWidth, 0,
+			// 			rightClipWidth,
+			// 			clipBox.height
+			// 		);
+			// 	}
+			// }
 			// Rest of your existing code for handling the blob
 			const blob = await new Promise(resolve => {
 				canvas.toBlob(resolve, 'image/jpeg', 0.9);
