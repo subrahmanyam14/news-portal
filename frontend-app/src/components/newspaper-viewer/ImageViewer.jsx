@@ -233,25 +233,34 @@ export default function ImageViewer({
       <div key={index} className="page w-full h-full relative">
         <div className="page-content w-full h-full flex items-center justify-center p-0 m-0 overflow-hidden">
           <img
-            src={image.src}
-            alt={`Page ${image.id}`}
-            className="w-full h-full object-contain cursor-zoom-in block"
-            onClick={(e) => {
-              e.stopPropagation(); // Stop event bubbling
-
-              // Get the click position relative to the image
-              const rect = e.target.getBoundingClientRect();
-              const x = e.clientX - rect.left;
-              const y = e.clientY - rect.top;
-
-              // Calculate position as percentages of image dimensions
-              const percentX = x / rect.width;
-              const percentY = y / rect.height;
-
-              onZoomClick(image, { percentX, percentY }); // Pass image and click position
-            }}
-            style={{ maxHeight: '100%' }}
-          />
+  src={image.src}
+  alt={`Page ${image.id}`}
+  className="w-full h-full object-contain cursor-zoom-in block"
+  onClick={(e) => {
+    e.stopPropagation(); // Stop event bubbling
+    
+    // Get the click position relative to the image
+    const rect = e.target.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    // Calculate position as percentages of image dimensions
+    const percentX = x / rect.width;
+    const percentY = y / rect.height;
+    
+    // Check which side was clicked (left 1/3 vs right 1/3)
+    if (percentX < 0.33) {
+      // Left side clicked
+      handleNextClick();
+    } else  {
+      // Right side clicked
+      handlePrevClick();
+    }
+    // Center clicked - zoom functionality
+    onZoomClick(image, { percentX, percentY });
+  }}
+  style={{ maxHeight: '100%' }}
+/>
         </div>
       </div>
     ));
@@ -412,7 +421,7 @@ export default function ImageViewer({
               autoSize={true}
               maxShadowOpacity={0.8}
               showPageCorners={true}
-              disableFlipByClick={true}
+              disableFlipByClick={false}
             >
               {renderPages()}
             </HTMLFlipBook>
