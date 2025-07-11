@@ -411,9 +411,8 @@ export default function ImageViewer({
               startZIndex={10}
               autoSize={true}
               maxShadowOpacity={0.8}
-              showPageCorners={false}
-              disableFlipByClick={false}
-              useMouseEvents={false}
+              showPageCorners={true}
+              disableFlipByClick={true}
             >
               {renderPages()}
             </HTMLFlipBook>
