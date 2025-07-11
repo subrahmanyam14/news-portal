@@ -38,7 +38,7 @@ export default function ImageViewer({
   // Check if device is mobile
   useEffect(() => {
     const checkMobile = () => {
-      setIsMobile(window.innerWidth < 1280); // md breakpoint
+      setIsMobile(window.innerWidth < 1080); // md breakpoint
     };
 
     checkMobile();
@@ -259,7 +259,7 @@ export default function ImageViewer({
 
   // Main flipbook view
   return (
-    <div className="w-full my-20 flex flex-col justify-center items-center relative">
+    <div className="w-full my-10 flex flex-col justify-center items-center relative">
       <button
         className="absolute left-2 md:left-4 top-1/2 transform -translate-y-1/2 bg-gray-700 p-2 rounded-full text-white hover:bg-gray-600 disabled:opacity-50 z-20 transition-all duration-300 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:hover:bg-gray-400"
         onClick={handlePrevClick}
