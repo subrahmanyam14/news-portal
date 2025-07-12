@@ -246,185 +246,185 @@ const Navbar = () => {
   );
 
   return (
-  <>
-  {/* Standalone full-width logo container */}
-  <div className="w-full px-0 py-0 md:px-0 md:py-0" style={{ height: '40vh' }}>
-    <div className="flex items-center justify-center md:justify-start h-full">
-      <div
-        className="text-3xl font-bold cursor-pointer relative group w-full h-full"
-        onClick={handleHome}
-      >
-        {isLogoLoading ? (
-          <div className="flex items-center h-full">
-            <span className="text-black">E-</span>
-            <span className="text-black">Paper</span>
-          </div>
-        ) : logoUrl ? (
-          <div className="h-full flex items-center justify-center w-full">
-            <img 
-              src={logoUrl} 
-              alt="E-Paper Logo" 
-              className="h-full w-full object-contain md:object-cover" 
-            />
-            {userRole === 'superadmin' && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowLogoPopup(true);
-                }}
-                className="absolute right-0 top-0 translate-x-full -translate-y-1/4 bg-white text-black p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                <Edit2 className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="flex items-center relative h-full">
-            <span className="text-black">E-</span>
-            <span className="text-black">Paper</span>
-            {userRole === 'superadmin' && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowLogoPopup(true);
-                }}
-                className="absolute right-0 top-0 translate-x-full -translate-y-1/4 bg-white text-black p-1 rounded-full"
-              >
-                <Edit2 className="w-3 h-3" />
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  </div>
-
-  {/* Separate navigation header */}
-  <header className="z-50 text-white shadow-md bg-[#403fbb]">
-    <div className="container mx-auto md:p-4 md:flex md:flex-wrap md:items-center md:justify-between block">
-      <div className="w-full md:w-auto md:mb-0"></div> {/* Spacer */}
-
-      <div className="hidden md:flex items-center space-x-4">
-        {/* Additional Links */}
-        {displayLinks.map((link) => (
-          <button
-            key={link._id || link.path}
-            onClick={() => handleNavigation(link.path, link.isExternal)}
-            className="flex items-center px-3 py-1 text-white hover:text-gray-200 transition-colors"
+    <>
+      {/* Standalone full-width logo container */}
+      <div className="w-full px-0 py-0 md:px-0 md:py-0">
+        <div className="flex items-center justify-center md:justify-start h-full">
+          <div
+            className="text-3xl font-bold cursor-pointer relative group w-full h-full"
+            onClick={handleHome}
           >
-            {link.icon}
-            <span>{link.name}</span>
-          </button>
-        ))}
+            {isLogoLoading ? (
+              <div className="flex items-center h-full">
+                <span className="text-black">E-</span>
+                <span className="text-black">Paper</span>
+              </div>
+            ) : logoUrl ? (
+              <div className="h-full flex items-center justify-center w-full">
+                <img
+                  src={logoUrl}
+                  alt="E-Paper Logo"
+                  className="h-full w-full object-contain md:object-cover"
+                />
+                {userRole === 'superadmin' && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowLogoPopup(true);
+                    }}
+                    className="absolute right-8 top-4 translate-x-full -translate-y-1/4 bg-white text-black p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center relative h-full">
+                <span className="text-black">E-</span>
+                <span className="text-black">Paper</span>
+                {userRole === 'superadmin' && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowLogoPopup(true);
+                    }}
+                    className="absolute right-8 top-4 translate-x-full -translate-y-1/4 bg-white text-black p-1 rounded-full z-10"
+                  >
+                    <Edit2 className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
 
-        {/* Auth Buttons */}
-        {isLoggedIn ? (
-          <div className="flex space-x-2">
-            {userRole === 'superadmin' && (
+      {/* Separate navigation header */}
+      <header className="z-50 text-white shadow-md bg-[#403fbb]">
+        <div className="container mx-auto md:p-4 md:flex md:flex-wrap md:items-center md:justify-between block">
+          <div className="w-full md:w-auto md:mb-0"></div> {/* Spacer */}
+
+          <div className="hidden md:flex items-center space-x-4">
+            {/* Additional Links */}
+            {displayLinks.map((link) => (
               <button
-                onClick={handleSuperAdmin}
+                key={link._id || link.path}
+                onClick={() => handleNavigation(link.path, link.isExternal)}
+                className="flex items-center px-3 py-1 text-white hover:text-gray-200 transition-colors"
+              >
+                {link.icon}
+                <span>{link.name}</span>
+              </button>
+            ))}
+
+            {/* Auth Buttons */}
+            {isLoggedIn ? (
+              <div className="flex space-x-2">
+                {userRole === 'superadmin' && (
+                  <button
+                    onClick={handleSuperAdmin}
+                    className="flex items-center px-3 py-1 bg-gray-100 text-black rounded hover:bg-gray-200 transition-colors"
+                  >
+                    <UserCog className="w-4 h-4 mr-1" />
+                    <span>Super Admin</span>
+                  </button>
+                )}
+                <button
+                  onClick={handleDashboard}
+                  className="flex items-center px-3 py-1 bg-gray-100 text-black rounded hover:bg-gray-200 transition-colors"
+                >
+                  <LayoutDashboard className="w-4 h-4 mr-1" />
+                  <span>Dashboard</span>
+                </button>
+                <button
+                  onClick={handleLogout}
+                  className="flex items-center px-3 py-1 bg-white text-black rounded hover:bg-gray-100 transition-colors border border-gray-300"
+                >
+                  <LogOut className="w-4 h-4 mr-1" />
+                  <span>Logout</span>
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={handleLogin}
                 className="flex items-center px-3 py-1 bg-gray-100 text-black rounded hover:bg-gray-200 transition-colors"
               >
-                <UserCog className="w-4 h-4 mr-1" />
-                <span>Super Admin</span>
+                <LogIn className="w-4 h-4 mr-1" />
+                <span>Login</span>
               </button>
             )}
+          </div>
+
+          {/* Mobile menu button */}
+          <div className="md:hidden flex justify-end w-full my-2 pr-2">
             <button
-              onClick={handleDashboard}
-              className="flex items-center px-3 py-1 bg-gray-100 text-black rounded hover:bg-gray-200 transition-colors"
+              className="text-white hover:text-gray-600 transition-colors"
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              aria-label="Toggle menu"
             >
-              <LayoutDashboard className="w-4 h-4 mr-1" />
-              <span>Dashboard</span>
-            </button>
-            <button
-              onClick={handleLogout}
-              className="flex items-center px-3 py-1 bg-white text-black rounded hover:bg-gray-100 transition-colors border border-gray-300"
-            >
-              <LogOut className="w-4 h-4 mr-1" />
-              <span>Logout</span>
+              {isMobileMenuOpen ? <X /> : <Menu />}
             </button>
           </div>
-        ) : (
-          <button
-            onClick={handleLogin}
-            className="flex items-center px-3 py-1 bg-gray-100 text-black rounded hover:bg-gray-200 transition-colors"
-          >
-            <LogIn className="w-4 h-4 mr-1" />
-            <span>Login</span>
-          </button>
-        )}
-      </div>
+        </div>
 
-      {/* Mobile menu button */}
-      <div className="md:hidden flex justify-end w-full my-2 pr-2">
-        <button
-          className="text-white hover:text-gray-600 transition-colors"
-          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          aria-label="Toggle menu"
-        >
-          {isMobileMenuOpen ? <X /> : <Menu />}
-        </button>
-      </div>
-    </div>
-
-    {/* Mobile menu */}
-    {isMobileMenuOpen && (
-      <div className="md:hidden px-4 py-3 bg-[#5756c5] flex flex-col space-y-3">
-        {/* Additional Links in Mobile */}
-        {displayLinks.map((link) => (
-          <button
-            key={link._id || link.path}
-            onClick={() => handleNavigation(link.path, link.isExternal)}
-            className="flex items-center justify-center px-3 py-2 text-white hover:text-gray-600 transition-colors"
-          >
-            {link.icon}
-            <span>{link.name}</span>
-          </button>
-        ))}
-
-        {/* Auth Buttons in Mobile */}
-        {isLoggedIn ? (
-          <>
-            {userRole === 'superadmin' && (
+        {/* Mobile menu */}
+        {isMobileMenuOpen && (
+          <div className="md:hidden px-4 py-3 bg-[#5756c5] flex flex-col space-y-3">
+            {/* Additional Links in Mobile */}
+            {displayLinks.map((link) => (
               <button
-                onClick={handleSuperAdmin}
+                key={link._id || link.path}
+                onClick={() => handleNavigation(link.path, link.isExternal)}
+                className="flex items-center justify-center px-3 py-2 text-white hover:text-gray-600 transition-colors"
+              >
+                {link.icon}
+                <span>{link.name}</span>
+              </button>
+            ))}
+
+            {/* Auth Buttons in Mobile */}
+            {isLoggedIn ? (
+              <>
+                {userRole === 'superadmin' && (
+                  <button
+                    onClick={handleSuperAdmin}
+                    className="flex items-center justify-center px-3 py-2 bg-white text-black rounded hover:bg-gray-200 transition-colors"
+                  >
+                    <UserCog className="w-5 h-5 mr-2" />
+                    <span>Super Admin</span>
+                  </button>
+                )}
+                <button
+                  onClick={handleDashboard}
+                  className="flex items-center justify-center px-3 py-2 bg-white text-black rounded hover:bg-gray-200 transition-colors"
+                >
+                  <LayoutDashboard className="w-5 h-5 mr-2" />
+                  <span>Dashboard</span>
+                </button>
+                <button
+                  onClick={handleLogout}
+                  className="flex items-center justify-center px-3 py-2 bg-white text-black rounded hover:bg-gray-200 transition-colors border border-gray-300"
+                >
+                  <LogOut className="w-5 h-5 mr-2" />
+                  <span>Logout</span>
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={handleLogin}
                 className="flex items-center justify-center px-3 py-2 bg-white text-black rounded hover:bg-gray-200 transition-colors"
               >
-                <UserCog className="w-5 h-5 mr-2" />
-                <span>Super Admin</span>
+                <LogIn className="w-5 h-5 mr-2" />
+                <span>Login</span>
               </button>
             )}
-            <button
-              onClick={handleDashboard}
-              className="flex items-center justify-center px-3 py-2 bg-white text-black rounded hover:bg-gray-200 transition-colors"
-            >
-              <LayoutDashboard className="w-5 h-5 mr-2" />
-              <span>Dashboard</span>
-            </button>
-            <button
-              onClick={handleLogout}
-              className="flex items-center justify-center px-3 py-2 bg-white text-black rounded hover:bg-gray-200 transition-colors border border-gray-300"
-            >
-              <LogOut className="w-5 h-5 mr-2" />
-              <span>Logout</span>
-            </button>
-          </>
-        ) : (
-          <button
-            onClick={handleLogin}
-            className="flex items-center justify-center px-3 py-2 bg-white text-black rounded hover:bg-gray-200 transition-colors"
-          >
-            <LogIn className="w-5 h-5 mr-2" />
-            <span>Login</span>
-          </button>
+          </div>
         )}
-      </div>
-    )}
 
-    {/* Logo Upload Popup */}
-    {showLogoPopup && <LogoPopup />}
-  </header>
-</>
+        {/* Logo Upload Popup */}
+        {showLogoPopup && <LogoPopup />}
+      </header>
+    </>
   );
 };
 
