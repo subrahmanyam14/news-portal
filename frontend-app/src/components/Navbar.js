@@ -302,9 +302,9 @@ const Navbar = () => {
       {/* Separate navigation header */}
       <header className="z-50 text-white shadow-md bg-[#403fbb]">
         <div className="container mx-auto md:p-4 md:flex md:flex-wrap md:items-center md:justify-between block">
-          <div className="w-full md:w-auto md:mb-0"></div> {/* Spacer */}
+          {/* Empty spacer div removed since we're centering */}
 
-          <div className="hidden md:flex items-center space-x-4">
+          <div className="hidden md:flex items-center justify-center flex-1 space-x-20">  {/* Added justify-center and flex-1 */}
             {/* Additional Links */}
             {displayLinks.map((link) => (
               <button
@@ -316,10 +316,12 @@ const Navbar = () => {
                 <span>{link.name}</span>
               </button>
             ))}
+          </div>
 
-            {/* Auth Buttons */}
+          {/* Auth Buttons - Moved inside the centered container but right-aligned */}
+          <div className="hidden md:flex items-center space-x-2 ml-auto">  {/* Added ml-auto */}
             {isLoggedIn ? (
-              <div className="flex space-x-2">
+              <>
                 {userRole === 'superadmin' && (
                   <button
                     onClick={handleSuperAdmin}
@@ -343,7 +345,7 @@ const Navbar = () => {
                   <LogOut className="w-4 h-4 mr-1" />
                   <span>Logout</span>
                 </button>
-              </div>
+              </>
             ) : (
               <button
                 onClick={handleLogin}
@@ -355,7 +357,7 @@ const Navbar = () => {
             )}
           </div>
 
-          {/* Mobile menu button */}
+          {/* Mobile menu button remains unchanged */}
           <div className="md:hidden flex justify-end w-full my-2 pr-2">
             <button
               className="text-white hover:text-gray-600 transition-colors"
@@ -367,7 +369,7 @@ const Navbar = () => {
           </div>
         </div>
 
-        {/* Mobile menu */}
+        {/* Mobile menu remains unchanged */}
         {isMobileMenuOpen && (
           <div className="md:hidden px-4 py-3 bg-[#5756c5] flex flex-col space-y-3">
             {/* Additional Links in Mobile */}

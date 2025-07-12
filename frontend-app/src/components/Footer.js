@@ -47,16 +47,16 @@ const Footer = () => {
                 </h3>
               )}
             </div>
-            <p className="text-gray-400 text-sm">
+            {/* <p className="text-gray-400 text-sm">
               A Portrait of Telangana People's Life
-            </p>
+            </p> */}
           </div>
           
           <div>
             <h3 className="text-lg font-medium mb-3 text-white">Quick Links</h3>
             <ul className="space-y-2 text-gray-400">
               <li><a href="/" className="hover:text-[#403fbb] transition-colors">Home</a></li>
-              <li><a href="#" className="hover:text-[#403fbb] transition-colors">Archives</a></li>
+              {/* <li><a href="#" className="hover:text-[#403fbb] transition-colors">Archives</a></li> */}
               <li><a href="#" className="hover:text-[#403fbb] transition-colors">Subscribe</a></li>
               <li><a href="#" className="hover:text-[#403fbb] transition-colors">Contact Us</a></li>
             </ul>
@@ -65,16 +65,16 @@ const Footer = () => {
           <div>
             <h3 className="text-lg font-medium mb-3 text-white">Archives</h3>
             <p className="text-gray-400 text-sm">
-              Access our newspaper archives dating back to 1989. Browse by date or search for specific topics.
+              Access our newspaper archives dating back to 1989. Browse by date.
             </p>
-            <button className="mt-2 px-4 py-2 bg-[#403fbb] rounded hover:bg-[#5756c5] transition-colors">
+            {/* <button className="mt-2 px-4 py-2 bg-[#403fbb] rounded hover:bg-[#5756c5] transition-colors">
               Browse Archives
-            </button>
+            </button> */}
           </div>
         </div>
         
         <div className="mt-8 pt-6 border-t border-gray-700 text-center text-gray-400 text-sm">
-          © {new Date().getFullYear()} E-Paper. All Rights Reserved.
+          © {new Date().getFullYear()} epaper.thesiddipettimes.in. All Rights Reserved.
         </div>
       </div>
     </footer>
