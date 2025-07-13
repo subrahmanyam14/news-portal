@@ -483,30 +483,92 @@ export default function NewspaperViewer() {
 		setMovingClipBox(false);
 	};
 
-	const uploadImage = async (blob) => {
+	const addLogoAndUploadImage = async (clippedBlob, forDownload = false) => {
 		try {
-			const formData = new FormData();
-			formData.append('file', blob, `newspaper-clip-${selectedDate}.jpg`);
+			const clippedImage = await createImageBitmap(clippedBlob);
+			const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}/logo`);
+			const logoImage = await loadImage(response?.data?.data?.url || 'https://sin1.contabostorage.com/4b599cbe842d49b1b0e9e00bcab7a62d:ezypress/epaper/logos/1752336513089-logo-1752336513081-tst_logo.jpg');
 
-			try {
-				const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/image/upload`, {
-					method: 'POST',
-					body: formData
-				});
+			const logoHeight = Math.floor(clippedImage.height * 0.20); 
+			const finalCanvas = document.createElement('canvas');
+			finalCanvas.width = clippedImage.width;
+			finalCanvas.height = logoHeight + clippedImage.height;
 
-				if (!response.ok) throw new Error(`Upload failed with status: ${response.status}`);
-				const data = await response.json();
-				return data.publicUrl;
-			} catch (uploadError) {
-				console.error('Error uploading image, using local URL instead:', uploadError);
-				// Return a local blob URL if server upload fails
-				return URL.createObjectURL(blob);
+			const ctx = finalCanvas.getContext('2d');
+
+			// Draw logo
+			ctx.drawImage(logoImage, 0, 0, clippedImage.width, logoHeight);
+			// Draw clipped image
+			ctx.drawImage(clippedImage, 0, logoHeight);
+
+			const finalBlob = await new Promise((resolve) =>
+				finalCanvas.toBlob(resolve, 'image/jpeg', 0.95)
+			);
+
+			if (!finalBlob) {
+				throw new Error('Failed to create image with logo.');
 			}
-		} catch (error) {
-			console.error('Error processing image for upload:', error);
-			throw error;
+
+			if (forDownload) {
+				// Just return blob for local download
+				return finalBlob;
+			}
+
+			// Upload if not for download
+			const uploadedUrl = await uploadImage(finalBlob);
+			return uploadedUrl;
+		} catch (err) {
+			console.error('Error while adding logo:', err);
+			throw err;
 		}
 	};
+
+
+	const loadImage = (src) => {
+		return new Promise((resolve, reject) => {
+			const img = new Image();
+			img.crossOrigin = 'anonymous'; // important for external URLs
+			img.onload = () => resolve(img);
+			img.onerror = reject;
+			img.src = src;
+		});
+	};
+
+
+	const uploadImage = async (blob) => {
+  try {
+    const formData = new FormData();
+    const fileName = `newspaper-clip-${selectedDate}.jpg`;
+    formData.append('file', blob, fileName);
+
+    try {
+      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/image/upload`, {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) throw new Error(`Upload failed with status: ${response.status}`);
+
+      const data = await response.json();
+
+      // Extract file name from Supabase URL
+      const uploadedUrl = data.publicUrl;
+      const urlParts = uploadedUrl.split('/');
+      const imageFileName = urlParts[urlParts.length - 1];
+
+      // Return viewer route instead of raw file
+      return `${window.location.origin}/view-image?img=${imageFileName}`;
+
+    } catch (uploadError) {
+      console.error('Error uploading image, using local URL instead:', uploadError);
+      return URL.createObjectURL(blob); // fallback
+    }
+  } catch (error) {
+    console.error('Error processing image for upload:', error);
+    throw error;
+  }
+};
+
 
 	useEffect(() => {
 		if (!activeImage) return;
@@ -523,116 +585,44 @@ export default function NewspaperViewer() {
 			const ctx = canvas.getContext('2d');
 
 			// if (isMobile) {
-				// Mobile - single image clipping
-				const img = new Image();
-				img.crossOrigin = 'Anonymous';
+			// Mobile - single image clipping
+			const img = new Image();
+			img.crossOrigin = 'Anonymous';
 
-				await new Promise((resolve, reject) => {
-					img.onload = resolve;
-					img.onerror = reject;
-					img.src = activeImage.src;
-				});
+			await new Promise((resolve, reject) => {
+				img.onload = resolve;
+				img.onerror = reject;
+				img.src = activeImage.src;
+			});
 
-				const imgWidth = img.naturalWidth;
-				const imgHeight = img.naturalHeight;
-				const containerRect = clipContainerRef.current.getBoundingClientRect();
-				const scaleX = imgWidth / containerRect.width;
-				const scaleY = imgHeight / containerRect.height;
+			const imgWidth = img.naturalWidth;
+			const imgHeight = img.naturalHeight;
+			const containerRect = clipContainerRef.current.getBoundingClientRect();
+			const scaleX = imgWidth / containerRect.width;
+			const scaleY = imgHeight / containerRect.height;
 
-				const actualX = clipBox.x * scaleX;
-				const actualY = clipBox.y * scaleY;
-				const actualWidth = clipBox.width * scaleX;
-				const actualHeight = clipBox.height * scaleY;
+			const actualX = clipBox.x * scaleX;
+			const actualY = clipBox.y * scaleY;
+			const actualWidth = clipBox.width * scaleX;
+			const actualHeight = clipBox.height * scaleY;
 
-				canvas.width = actualWidth;
-				canvas.height = actualHeight;
+			canvas.width = actualWidth;
+			canvas.height = actualHeight;
 
-				ctx.drawImage(
-					img,
-					actualX, actualY, actualWidth, actualHeight,
-					0, 0, actualWidth, actualHeight
-				);
-			// } else {
-			// 	// Desktop - two images clipping
-			// 	const containerRect = clipContainerRef.current.getBoundingClientRect();
-			// 	const singleImageWidth = containerRect.width / 2;
+			ctx.drawImage(
+				img,
+				actualX, actualY, actualWidth, actualHeight,
+				0, 0, actualWidth, actualHeight
+			);
 
-			// 	// Load both images with distinct sources
-			// 	const leftImg = new Image();
-			// 	const rightImg = new Image();
-			// 	leftImg.crossOrigin = 'Anonymous';
-			// 	rightImg.crossOrigin = 'Anonymous';
-
-			// 	await Promise.all([
-			// 		new Promise((resolve) => {
-			// 			leftImg.onload = resolve;
-			// 			leftImg.src = activeImage.src;
-			// 		}),
-			// 		new Promise((resolve) => {
-			// 			rightImg.onload = resolve;
-			// 			rightImg.src = nextImageToShow?.src || activeImage.src;
-			// 		})
-			// 	]);
-
-			// 	// Debug output
-			// 	console.log('Left image src:', leftImg.src);
-			// 	console.log('Right image src:', rightImg.src);
-			// 	console.assert(leftImg.src !== rightImg.src, 'Images should be different!');
-
-			// 	// Set canvas dimensions
-			// 	canvas.width = clipBox.width;
-			// 	canvas.height = clipBox.height;
-			// 	ctx.fillStyle = 'white';
-			// 	ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-			// 	// Calculate which parts to draw
-			// 	const clipLeft = Math.max(0, clipBox.x);
-			// 	const clipRight = Math.min(containerRect.width, clipBox.x + clipBox.width);
-			// 	const leftClipWidth = Math.min(singleImageWidth - clipLeft, clipBox.width);
-			// 	const rightClipWidth = clipBox.width - leftClipWidth;
-
-			// 	// Draw left portion if needed
-			// 	if (leftClipWidth > 0) {
-			// 		const scaleX = leftImg.naturalWidth / singleImageWidth;
-			// 		const scaleY = leftImg.naturalHeight / containerRect.height;
-
-			// 		ctx.drawImage(
-			// 			leftImg,
-			// 			clipLeft * scaleX,
-			// 			clipBox.y * scaleY,
-			// 			leftClipWidth * scaleX,
-			// 			clipBox.height * scaleY,
-			// 			0, 0,
-			// 			leftClipWidth,
-			// 			clipBox.height
-			// 		);
-			// 	}
-
-			// 	// Draw right portion if needed
-			// 	if (rightClipWidth > 0) {
-			// 		const scaleX = rightImg.naturalWidth / singleImageWidth;
-			// 		const scaleY = rightImg.naturalHeight / containerRect.height;
-			// 		const rightClipX = Math.max(0, clipBox.x - singleImageWidth);
-
-			// 		ctx.drawImage(
-			// 			rightImg,
-			// 			rightClipX * scaleX,
-			// 			clipBox.y * scaleY,
-			// 			rightClipWidth * scaleX,
-			// 			clipBox.height * scaleY,
-			// 			leftClipWidth, 0,
-			// 			rightClipWidth,
-			// 			clipBox.height
-			// 		);
-			// 	}
-			// }
 			// Rest of your existing code for handling the blob
 			const blob = await new Promise(resolve => {
 				canvas.toBlob(resolve, 'image/jpeg', 0.9);
 			});
 
 			if (action === 'download') {
-				const url = URL.createObjectURL(blob);
+				const finalBlob = await addLogoAndUploadImage(blob, true); // get blob with logo
+				const url = URL.createObjectURL(finalBlob);
 				const link = document.createElement('a');
 				link.href = url;
 				link.download = `newspaper-clip-${selectedDate}.jpg`;
@@ -640,20 +630,24 @@ export default function NewspaperViewer() {
 				link.click();
 				document.body.removeChild(link);
 				URL.revokeObjectURL(url);
-			}
-			else if (action === 'facebook' || action === 'whatsapp') {
+			} else if (action === 'facebook' || action === 'whatsapp') {
 				try {
-					const publicImageUrl = await uploadImage(blob);
-					if (action === 'facebook') {
-						window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(publicImageUrl)}`, '_blank');
-					} else if (action === 'whatsapp') {
-						window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent('Check out this newspaper clipping! ' + publicImageUrl)}`, '_blank');
+					const publicImageUrl = await addLogoAndUploadImage(blob); // get uploaded URL with logo
+					if (publicImageUrl) {
+						if (action === 'facebook') {
+							window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(publicImageUrl)}`, '_blank');
+						} else if (action === 'whatsapp') {
+							window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent('Check out this newspaper clipping! ' + publicImageUrl)}`, '_blank');
+						}
+					} else {
+						throw new Error('No image URL returned');
 					}
 				} catch (shareError) {
 					console.error('Error sharing image:', shareError);
 					alert('Unable to share image. Please try downloading instead.');
 				}
 			}
+
 		} catch (err) {
 			console.error('Error processing image:', err);
 			alert('An error occurred while processing the image.');
