@@ -949,7 +949,7 @@ export default function ImageViewer() {
         if (action === 'facebook') {
           window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(publicImageUrl)}`, '_blank');
         } else if (action === 'whatsapp') {
-          window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent('Check out this newspaper clipping! ' + publicImageUrl)}`, '_blank');
+          window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(publicImageUrl)}`, '_blank');
         }
       }
     } catch (err) {
