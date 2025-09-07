@@ -15,14 +15,14 @@ export const AuthProvider = ({ children }) => {
       const token = localStorage.getItem('token');
       const userData = localStorage.getItem('user');
       const loginTimestamp = localStorage.getItem('loginTimestamp');
-      
+
       if (token && userData && loginTimestamp) {
         // Check if 24 hours have passed since login
         const currentTime = Date.now();
         const loginTime = parseInt(loginTimestamp, 10);
         const timeDifference = currentTime - loginTime;
-        const hoursPassed = timeDifference / (1000 * 60 * 60); // Convert milliseconds to hours
-        
+        const hoursPassed = timeDifference / (1000 * 60 * 60);
+
         if (hoursPassed >= 24) {
           // 24 hours have passed, auto logout
           logout();
@@ -33,17 +33,14 @@ export const AuthProvider = ({ children }) => {
             setUser(JSON.parse(userData));
           } catch (error) {
             console.error('Error parsing user data:', error);
-            logout(); // Logout if user data is corrupted
+            logout();
           }
-          
+
           // Set timeout for auto logout when session expires
-          const timeRemaining = (24 * 60 * 60 * 1000) - timeDifference; // Time remaining in milliseconds
-          const autoLogoutTimer = setTimeout(() => {
+          const timeRemaining = (24 * 60 * 60 * 1000) - timeDifference;
+          setTimeout(() => {
             logout();
           }, timeRemaining);
-          
-          // Clear timeout when component unmounts
-          return () => clearTimeout(autoLogoutTimer);
         }
       }
       setLoading(false);
@@ -54,14 +51,15 @@ export const AuthProvider = ({ children }) => {
 
   // Login function
   const login = (token, userData) => {
-    // Store login timestamp
+    console.log('Logging in user:', userData); // Debug log
     const loginTimestamp = Date.now();
     localStorage.setItem('token', token);
     localStorage.setItem('user', JSON.stringify(userData));
     localStorage.setItem('loginTimestamp', loginTimestamp.toString());
-    
+
     setIsLoggedIn(true);
     setUser(userData);
+    setLoading(false);
   };
 
   // Logout function
@@ -69,13 +67,12 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     localStorage.removeItem('loginTimestamp');
-    
+
     setIsLoggedIn(false);
     setUser(null);
     setLoading(false);
   };
 
-  // The context value that will be provided
   const value = {
     isLoggedIn,
     user,

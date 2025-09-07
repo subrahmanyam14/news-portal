@@ -9,7 +9,7 @@ const Login = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, isLoggedIn, user } = useAuth(); // Add isLoggedIn and user to see current state
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -21,24 +21,39 @@ const Login = () => {
         password
       });
       
-      const { token, user } = response.data;
+      const { token, user: userData } = response.data;
       
-      // Use the login function from context which now also stores login timestamp
-      login(token, user);
+      console.log('Login successful, user role:', userData.role); // Debug log
       
-      // Navigate based on user role
-      if(user.role === "superadmin") {
-        navigate('/super-admin');
-      } else {
-        navigate('/dashboard');
-      }
+      // Use the login function from context
+      login(token, userData);
+      
+      // Add a small delay to ensure state is updated before navigation
+      setTimeout(() => {
+        console.log('Navigating, user role:', userData.role); // Debug log
+        
+        // Navigate based on user role
+        if(userData.role === "superadmin") {
+          navigate('/super-admin');
+        } else if(userData.role === "admin") {
+          navigate('/admin');
+        } else {
+          navigate('/dashboard');
+        }
+      }, 100);
       
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'An error occurred during login');
+      console.error('Login error:', err); // Debug log
     } finally {
       setLoading(false);
     }
   };
+
+  // Debug: log auth state changes
+  React.useEffect(() => {
+    console.log('Auth state changed - isLoggedIn:', isLoggedIn, 'User:', user);
+  }, [isLoggedIn, user]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-white p-4">
