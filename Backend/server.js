@@ -1,7 +1,7 @@
 const express = require("express");
 const cors = require('cors');
 const dotenv = require('dotenv');
-
+const path = require('path');
 
 const connectDB = require('./config/db.js');
 const userRoute = require("./route/userRoutes.js");
@@ -22,19 +22,16 @@ const app = express();
 
 app.use(cors({ origin: ["https://epaper.thesiddipettimes.in"] }));
 
-
 app.use(express.json());
 
+// Serve static files from uploads directory
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 app.use("/user", userRoute);
-
 app.use("/newspaper", newspaperRoute);
-
 app.use("/navlink", navlinkRoute);
-
 app.use("/headline", HeadLineRoute);
-
 app.use('/logo', logoRoutes);
-
 app.use("/image", uploadRoutes);
 
 app.listen(port, async () => {
