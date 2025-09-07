@@ -3,15 +3,91 @@ const fs = require('fs');
 const path = require('path');
 const Logo = require('../model/Logo');
 const { promisify } = require('util');
-const { PutObjectCommand, DeleteObjectCommand } = require("@aws-sdk/client-s3");
-const s3Client = require("../config/s3Client");
 
 // Promisify file system functions
 const unlink = promisify(fs.unlink);
+const mkdir = promisify(fs.mkdir);
 
-// Debug the s3Client import
-console.log('Imported s3Client type:', typeof s3Client);
-console.log('s3Client.send type:', typeof s3Client?.send);
+// Configure directories
+const TEMP_DIR = path.join(__dirname, '..', 'temp');
+const LOGOS_DIR = path.join(__dirname, '..', 'uploads', 'logos');
+
+// Ensure directories exist
+const ensureDirsExist = async () => {
+  if (!fs.existsSync(TEMP_DIR)) await mkdir(TEMP_DIR, { recursive: true });
+  if (!fs.existsSync(LOGOS_DIR)) await mkdir(LOGOS_DIR, { recursive: true });
+};
+
+// Multer configuration for logo upload
+const storage = multer.diskStorage({
+  destination: async (req, file, cb) => {
+    try {
+      await ensureDirsExist();
+      cb(null, TEMP_DIR);
+    } catch (error) {
+      cb(error);
+    }
+  },
+  filename: (req, file, cb) => {
+    const safeName = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
+    cb(null, `logo-${Date.now()}-${safeName}`);
+  }
+});
+
+const upload = multer({
+  storage,
+  limits: { 
+    fileSize: 5 * 1024 * 1024, // 5MB for logos
+    fieldSize: 2 * 1024 * 1024,
+    fields: 5,
+    files: 1
+  },
+  fileFilter: (req, file, cb) => {
+    console.log('Logo filter - mimetype:', file.mimetype, 'originalname:', file.originalname);
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed'), false);
+    }
+  }
+});
+
+// Generate local server URL for logos
+const generateLocalLogoUrl = (filePath) => {
+  const relativePath = filePath.replace(path.join(__dirname, '..'), '');
+  return `${process.env.BASE_URL || 'http://localhost:3000'}${relativePath.replace(/\\/g, '/')}`;
+};
+
+// Save logo to local server storage
+const saveLogoToLocalStorage = async (fileBuffer, fileName) => {
+  try {
+    const timestamp = Date.now();
+    const safeFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const filePath = path.join(LOGOS_DIR, `${timestamp}-${safeFileName}`);
+    
+    // Ensure directory exists
+    if (!fs.existsSync(LOGOS_DIR)) {
+      await mkdir(LOGOS_DIR, { recursive: true });
+    }
+    
+    // Write file to disk
+    await fs.promises.writeFile(filePath, fileBuffer);
+    
+    // Generate public URL
+    const publicUrl = generateLocalLogoUrl(filePath);
+    
+    console.log('Logo saved to local storage:', filePath);
+    
+    return {
+      publicUrl,
+      filePath,
+      fileName: `${timestamp}-${safeFileName}`
+    };
+  } catch (error) {
+    console.error('Local storage save error:', error);
+    throw new Error(`Failed to save logo to local storage: ${error.message}`);
+  }
+};
 
 // @desc    Get logo
 // @route   GET /api/v1/logo
@@ -55,80 +131,36 @@ exports.addLogo = async (req, res) => {
     let tempFilePath = req.file.path;
 
     try {
-        // Validate s3Client before using
-        if (!s3Client || typeof s3Client.send !== 'function') {
-            throw new Error('S3 client is not properly initialized. Check your s3Client configuration.');
-        }
+        // Ensure directories exist
+        await ensureDirsExist();
 
-        // Find existing logo to delete from Contabo if it exists
+        // Find existing logo to delete from local storage if it exists
         const existingLogo = await Logo.findOne();
 
         if (existingLogo && existingLogo.filePath) {
             try {
-                // Delete old logo from Contabo S3
-                const deleteParams = {
-                    Bucket: process.env.CONTABO_BUCKET_NAME || "ezypress",
-                    Key: existingLogo.filePath
-                };
-
-                const deleteCommand = new DeleteObjectCommand(deleteParams);
-                await s3Client.send(deleteCommand);
-                console.log('Old logo deleted from Contabo S3');
-                
+                // Delete old logo from local storage
+                if (fs.existsSync(existingLogo.filePath)) {
+                    await unlink(existingLogo.filePath);
+                    console.log('Old logo deleted from local storage');
+                }
             } catch (deleteErr) {
-                console.error('Error deleting old logo from Contabo:', deleteErr);
+                console.error('Error deleting old logo from local storage:', deleteErr);
                 // Don't fail the operation if deletion fails
             }
         }
 
-        // Upload new logo to Contabo S3
+        // Save new logo to local storage
         const fileName = path.basename(req.file.path);
         const fileBuffer = fs.readFileSync(req.file.path);
-        const timestamp = Date.now();
-        const filePath = `epaper/logos/${timestamp}-${fileName}`;
         
-        const uploadParams = {
-            Bucket: process.env.CONTABO_BUCKET_NAME || "ezypress",
-            Key: filePath,
-            Body: fileBuffer,
-            ContentType: req.file.mimetype,
-        };
-
-        console.log('Attempting to upload to S3 with params:', {
-            Bucket: uploadParams.Bucket,
-            Key: uploadParams.Key,
-            ContentType: uploadParams.ContentType
-        });
-
-        const uploadCommand = new PutObjectCommand(uploadParams);
-        const uploadResult = await s3Client.send(uploadCommand);
-        console.log('Logo uploaded to Contabo S3:', uploadResult);
-
-        // Generate public URL - FIXED FORMAT FOR CONTABO
-        const bucketName = process.env.CONTABO_BUCKET_NAME || "ezypress";
-        const endpoint = process.env.CONTABO_ENDPOINT;
-        const accountId = process.env.CONTABO_ACCOUNT_ID; // You need to add this env variable
-        
-        let publicUrl;
-        
-        if (accountId) {
-            // Format: https://sin1.contabostorage.com/ACCOUNT_ID:BUCKET_NAME/path/to/file
-            const cleanEndpoint = endpoint.replace('https://', '');
-            publicUrl = `https://${cleanEndpoint}/${accountId}:${bucketName}/${filePath}`;
-        } else {
-            // Fallback to the format you were using (but this might not work)
-            console.warn('CONTABO_ACCOUNT_ID not set. Using fallback URL format which may not work.');
-            const cleanEndpoint = endpoint.replace('https://', '');
-            publicUrl = `https://${bucketName}.${cleanEndpoint}/${filePath}`;
-        }
-        
-        console.log('Generated public URL:', publicUrl);
+        const result = await saveLogoToLocalStorage(fileBuffer, fileName);
 
         // Create or update logo in database
         const logoData = {
-            url: publicUrl,
-            filePath: filePath,
-            publicId: filePath
+            url: result.publicUrl,
+            filePath: result.filePath,
+            publicId: result.fileName
         };
 
         let logo;
@@ -142,7 +174,7 @@ exports.addLogo = async (req, res) => {
             logo = await Logo.create(logoData);
         }
 
-        // Only delete temp file after successful upload and database operation
+        // Delete temp file after successful save and database operation
         await unlink(tempFilePath).catch(err => 
             console.error('Warning: Temp file deletion failed:', err)
         );
@@ -156,8 +188,6 @@ exports.addLogo = async (req, res) => {
         // Enhanced error logging
         console.error('Logo upload error details:', {
             message: error.message,
-            statusCode: error.$metadata?.httpStatusCode,
-            requestId: error.$metadata?.requestId,
             stack: error.stack
         });
 
@@ -171,8 +201,57 @@ exports.addLogo = async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Error uploading logo',
-            error: error.message,
-            details: error.$metadata?.httpStatusCode ? `HTTP ${error.$metadata.httpStatusCode}` : 'S3 Client Error'
+            error: error.message
         });
     }
 };
+
+// Error handling middleware for multer
+const handleMulterError = (error, req, res, next) => {
+  console.error('Multer error:', error);
+  
+  if (error instanceof multer.MulterError) {
+    switch (error.code) {
+      case 'LIMIT_FILE_SIZE':
+        return res.status(400).json({
+          success: false,
+          message: 'File too large. Maximum size is 5MB for logos.'
+        });
+      case 'LIMIT_FILE_COUNT':
+        return res.status(400).json({
+          success: false,
+          message: 'Too many files. Only one file allowed.'
+        });
+      case 'LIMIT_FIELD_COUNT':
+        return res.status(400).json({
+          success: false,
+          message: 'Too many fields in the form.'
+        });
+      case 'LIMIT_UNEXPECTED_FILE':
+        return res.status(400).json({
+          success: false,
+          message: 'Unexpected file field.'
+        });
+      default:
+        return res.status(400).json({
+          success: false,
+          message: `Upload error: ${error.message}`
+        });
+    }
+  }
+  
+  if (error.message === 'Unexpected end of form') {
+    return res.status(400).json({
+      success: false,
+      message: 'Upload interrupted or form data corrupted. Please try again.'
+    });
+  }
+  
+  return res.status(400).json({
+    success: false,
+    message: error.message || 'Upload failed'
+  });
+};
+
+// Export the upload middleware and error handler
+exports.uploadLogo = [upload.single('logo'), handleMulterError, exports.addLogo];
