@@ -3,7 +3,7 @@ const { PDFDocument } = require('pdf-lib');
 const fs = require('fs');
 const path = require('path');
 const { promisify } = require('util');
-const {NewspaperDetails} = require('../model/NewPaper');
+const { NewspaperDetails } = require('../model/NewPaper');
 const { exec } = require('child_process');
 
 // Promisify file system functions
@@ -47,7 +47,7 @@ const storage = multer.diskStorage({
 // Enhanced multer configuration with better limits and error handling
 const upload = multer({
   storage,
-  limits: { 
+  limits: {
     fileSize: 100 * 1024 * 1024, // 100MB
     fieldSize: 25 * 1024 * 1024,  // 25MB for field data
     fields: 10,                   // Maximum number of fields
@@ -81,7 +81,7 @@ const imageStorage = multer.diskStorage({
 
 const imageUpload = multer({
   storage: imageStorage,
-  limits: { 
+  limits: {
     fileSize: 10 * 1024 * 1024, // 10MB for images
     fieldSize: 2 * 1024 * 1024,  // 2MB for field data
     fields: 5,                   // Maximum number of fields
@@ -139,21 +139,21 @@ const saveToLocalStorage = async (fileBuffer, fileName, folder = 'newspapers') =
     const timestamp = Date.now();
     const safeFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
     const filePath = path.join(UPLOADS_DIR, folder, `${timestamp}-${safeFileName}`);
-    
+
     // Ensure directory exists
     const dir = path.dirname(filePath);
     if (!fs.existsSync(dir)) {
       await mkdir(dir, { recursive: true });
     }
-    
+
     // Write file to disk
     await fs.promises.writeFile(filePath, fileBuffer);
-    
+
     // Generate public URL
     const publicUrl = generateLocalImageUrl(filePath);
-    
+
     console.log('File saved to local storage:', filePath);
-    
+
     return {
       publicUrl,
       filePath,
@@ -321,7 +321,7 @@ const saveImagesToLocal = async (imagePaths) => {
     const batchUrls = await Promise.all(batchPromises);
     urls.push(...batchUrls);
 
-    console.log(`Saved batch ${i/batchSize + 1} of ${Math.ceil(imagePaths.length/batchSize)}`);
+    console.log(`Saved batch ${i / batchSize + 1} of ${Math.ceil(imagePaths.length / batchSize)}`);
   }
 
   return urls;
@@ -336,9 +336,9 @@ const uploadNewspaper = async (req, res) => {
 
   if (!req.file) {
     console.log('No file uploaded');
-    return res.status(400).json({ 
+    return res.status(400).json({
       success: false,
-      message: 'No PDF file uploaded' 
+      message: 'No PDF file uploaded'
     });
   }
 
@@ -351,7 +351,7 @@ const uploadNewspaper = async (req, res) => {
     console.log('File path:', pdfPath);
 
     // Clean up previous files if they exist
-    await rm(PAGES_DIR, { recursive: true, force: true }).catch(() => {});
+    await rm(PAGES_DIR, { recursive: true, force: true }).catch(() => { });
     await mkdir(PAGES_DIR, { recursive: true });
 
     pageCount = await validatePDF(pdfPath);
@@ -553,9 +553,9 @@ const getNewspaperByPagination = async (req, res) => {
       isPublished: true,
       publicationDate: { $lte: now }
     })
-    .sort({ publicationDate: -1 })
-    .skip(skip)
-    .limit(limit);
+      .sort({ publicationDate: -1 })
+      .skip(skip)
+      .limit(limit);
 
     if (!newspaper) {
       return res.status(404).json({
@@ -647,43 +647,59 @@ const getNewspapersIncludeFuture = async (req, res) => {
   }
 };
 
-const deleteNewspaper = async(req, res) => {
+const deleteNewspaper = async (req, res) => {
   try {
-    const {id} = req.params;
-    
+    const { id } = req.params;
+
     // First find the newspaper to get the file paths
     const newspaper = await NewspaperDetails.findById(id);
-    
-    if(!newspaper) {
+
+    if (!newspaper) {
       return res.status(404).send({
         success: false,
         message: `Newspaper details not found with id : ${id}`,
       });
     }
 
-    // Delete all image files from server storage by extracting paths from URLs
+    // Delete all image files from server storage
     if (newspaper.newspaperLinks && newspaper.newspaperLinks.length > 0) {
       for (const imageUrl of newspaper.newspaperLinks) {
         try {
-          // Parse the URL to extract the path
-          const urlObj = new URL(imageUrl);
-          const urlPath = urlObj.pathname;
-          
-          // Remove the base URL part to get the relative path
-          const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
-          let relativePath = urlPath;
-          
-          if (urlPath.startsWith('/uploads/')) {
-            relativePath = urlPath.substring(1); // Remove leading slash
+          // Extract the file path from the URL
+          // Handle URLs like:
+          // http://localhost:5000/uploads/newspapers/1757251752888-page-3.jpg
+          // https://epaper.thesiddipettimes.in/api/uploads/newspapers/1757265411595-logo.png
+
+          let filePath;
+
+          if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+            // Parse URL and extract pathname
+            const urlObj = new URL(imageUrl);
+            let pathname = urlObj.pathname;
+
+            // Remove /api prefix if it exists (for production URLs)
+            if (pathname.startsWith('/api/')) {
+              pathname = pathname.substring(4); // Remove '/api'
+            }
+
+            // Remove leading slash to get relative path
+            filePath = pathname.substring(1);
+          } else {
+            // If it's already a relative path
+            filePath = imageUrl.startsWith('/') ? imageUrl.substring(1) : imageUrl;
           }
-          
-          const fullPath = path.join(__dirname, '..', relativePath);
-          
-          // Check if file exists and delete it
+
+          // Construct the full path to the file on server
+          const fullPath = path.join(__dirname, '..', filePath);
+
+          // Check if file exists before attempting to delete
           if (fs.existsSync(fullPath)) {
             await unlink(fullPath);
-            console.log(`Deleted file: ${fullPath}`);
+            console.log(`Successfully deleted file: ${fullPath}`);
+          } else {
+            console.log(`File not found: ${fullPath}`);
           }
+
         } catch (fileError) {
           console.error(`Error deleting file from URL ${imageUrl}:`, fileError);
           // Continue with other files even if one fails
@@ -693,8 +709,8 @@ const deleteNewspaper = async(req, res) => {
 
     // Now delete the database record
     const deleteNewspaperDetails = await NewspaperDetails.findByIdAndDelete(id);
-    
-    if(!deleteNewspaperDetails) {
+
+    if (!deleteNewspaperDetails) {
       return res.status(404).send({
         success: false,
         message: `Newspaper details not found with id : ${id}`,
@@ -707,7 +723,7 @@ const deleteNewspaper = async(req, res) => {
     });
 
   } catch (error) {
-    console.error('deleteNewspaper:', error);
+    console.error('deleteNewspaper error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to delete the requested data',
@@ -783,7 +799,7 @@ const uploadImage = async (req, res) => {
 // Enhanced error handling middleware
 const handleMulterError = (error, req, res, next) => {
   console.error('Multer error:', error);
-  
+
   if (error instanceof multer.MulterError) {
     switch (error.code) {
       case 'LIMIT_FILE_SIZE':
@@ -813,14 +829,14 @@ const handleMulterError = (error, req, res, next) => {
         });
     }
   }
-  
+
   if (error.message === 'Unexpected end of form') {
     return res.status(400).json({
       success: false,
       message: 'Upload interrupted or form data corrupted. Please try again.'
     });
   }
-  
+
   return res.status(400).json({
     success: false,
     message: error.message || 'Upload failed'

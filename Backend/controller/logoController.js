@@ -58,6 +58,56 @@ const generateLocalLogoUrl = (filePath) => {
   return `${process.env.BASE_URL || 'http://localhost:3000'}${relativePath.replace(/\\/g, '/')}`;
 };
 
+// Extract file path from URL
+const extractFilePathFromUrl = (url) => {
+  try {
+    // Remove the base URL to get the relative path
+    const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+    const relativePath = url.replace(baseUrl, '');
+    
+    // Convert back to absolute file path
+    const absolutePath = path.join(__dirname, '..', relativePath.replace(/\//g, path.sep));
+    
+    return absolutePath;
+  } catch (error) {
+    console.error('Error extracting file path from URL:', error);
+    return null;
+  }
+};
+
+// Delete old logo file from server
+const deleteOldLogoFile = async (logoUrl) => {
+  try {
+    let filePath;
+    
+    // Check if we have a full URL or just a file path
+    if (logoUrl.startsWith('http')) {
+      filePath = extractFilePathFromUrl(logoUrl);
+    } else {
+      // Assume it's already a file path
+      filePath = logoUrl;
+    }
+    
+    if (!filePath) {
+      console.log('Could not determine file path from:', logoUrl);
+      return false;
+    }
+    
+    // Check if file exists before trying to delete
+    if (fs.existsSync(filePath)) {
+      await unlink(filePath);
+      console.log('Old logo deleted successfully:', filePath);
+      return true;
+    } else {
+      console.log('Old logo file not found:', filePath);
+      return false;
+    }
+  } catch (error) {
+    console.error('Error deleting old logo file:', error);
+    return false;
+  }
+};
+
 // Save logo to local server storage
 const saveLogoToLocalStorage = async (fileBuffer, fileName) => {
   try {
@@ -137,16 +187,12 @@ exports.addLogo = async (req, res) => {
         // Find existing logo to delete from local storage if it exists
         const existingLogo = await Logo.findOne();
 
-        if (existingLogo && existingLogo.filePath) {
-            try {
-                // Delete old logo from local storage
-                if (fs.existsSync(existingLogo.filePath)) {
-                    await unlink(existingLogo.filePath);
-                    console.log('Old logo deleted from local storage');
-                }
-            } catch (deleteErr) {
-                console.error('Error deleting old logo from local storage:', deleteErr);
-                // Don't fail the operation if deletion fails
+        // Delete old logo file if it exists
+        if (existingLogo) {
+            // Try to delete using filePath first (if stored), then fall back to URL
+            const fileToDelete = existingLogo.filePath || existingLogo.url;
+            if (fileToDelete) {
+                await deleteOldLogoFile(fileToDelete);
             }
         }
 
@@ -159,7 +205,7 @@ exports.addLogo = async (req, res) => {
         // Create or update logo in database
         const logoData = {
             url: result.publicUrl,
-            filePath: result.filePath,
+            filePath: result.filePath, // Store actual file path for easier deletion
             publicId: result.fileName
         };
 
@@ -181,7 +227,8 @@ exports.addLogo = async (req, res) => {
 
         res.status(200).json({
             success: true,
-            data: logo
+            data: logo,
+            message: 'Logo uploaded successfully'
         });
 
     } catch (error) {
@@ -201,6 +248,44 @@ exports.addLogo = async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Error uploading logo',
+            error: error.message
+        });
+    }
+};
+
+// @desc    Delete logo
+// @route   DELETE /api/v1/logo
+// @access  Private (superadmin)
+exports.deleteLogo = async (req, res) => {
+    try {
+        const logo = await Logo.findOne();
+
+        if (!logo) {
+            return res.status(404).json({
+                success: false,
+                message: 'No logo found to delete'
+            });
+        }
+
+        // Delete file from server
+        const fileToDelete = logo.filePath || logo.url;
+        if (fileToDelete) {
+            await deleteOldLogoFile(fileToDelete);
+        }
+
+        // Delete from database
+        await Logo.findByIdAndDelete(logo._id);
+
+        res.status(200).json({
+            success: true,
+            message: 'Logo deleted successfully'
+        });
+
+    } catch (error) {
+        console.error('Error deleting logo:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error deleting logo',
             error: error.message
         });
     }
