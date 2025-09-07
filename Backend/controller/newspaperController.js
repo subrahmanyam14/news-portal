@@ -1,11 +1,8 @@
-const express = require('express');
 const multer = require('multer');
 const { PDFDocument } = require('pdf-lib');
 const fs = require('fs');
 const path = require('path');
 const { promisify } = require('util');
-const { PutObjectCommand } = require("@aws-sdk/client-s3");
-const s3Client = require("../config/s3Client");
 const {NewspaperDetails} = require('../model/NewPaper');
 const { exec } = require('child_process');
 
@@ -15,18 +12,20 @@ const rm = promisify(fs.rm);
 const mkdir = promisify(fs.mkdir);
 const readdir = promisify(fs.readdir);
 
-// Debug the s3Client import (same as logo controller)
-console.log('Imported s3Client type:', typeof s3Client);
-console.log('s3Client.send type:', typeof s3Client?.send);
-
-// Configure temp directories
+// Configure directories
 const TEMP_DIR = path.join(__dirname, '..', 'temp');
 const PAGES_DIR = path.join(TEMP_DIR, 'pages');
+const UPLOADS_DIR = path.join(__dirname, '..', 'uploads');
+const NEWSPAPERS_DIR = path.join(UPLOADS_DIR, 'newspapers');
+const IMAGES_DIR = path.join(UPLOADS_DIR, 'images');
 
-// Ensure temp directories exist
+// Ensure directories exist
 const ensureDirsExist = async () => {
   if (!fs.existsSync(TEMP_DIR)) await mkdir(TEMP_DIR, { recursive: true });
   if (!fs.existsSync(PAGES_DIR)) await mkdir(PAGES_DIR, { recursive: true });
+  if (!fs.existsSync(UPLOADS_DIR)) await mkdir(UPLOADS_DIR, { recursive: true });
+  if (!fs.existsSync(NEWSPAPERS_DIR)) await mkdir(NEWSPAPERS_DIR, { recursive: true });
+  if (!fs.existsSync(IMAGES_DIR)) await mkdir(IMAGES_DIR, { recursive: true });
 };
 
 // Enhanced multer configuration with better error handling
@@ -128,68 +127,41 @@ const execCmd = async (cmd) => {
   });
 };
 
-// Generate proper Contabo S3 public URL (same as logo controller)
-const generateContaboPublicUrl = (filePath) => {
-  const bucketName = process.env.CONTABO_BUCKET_NAME || "ezypress";
-  const endpoint = process.env.CONTABO_ENDPOINT;
-  const accountId = process.env.CONTABO_ACCOUNT_ID;
-
-  let publicUrl;
-
-  if (accountId) {
-    // Format: https://sin1.contabostorage.com/ACCOUNT_ID:BUCKET_NAME/path/to/file
-    const cleanEndpoint = endpoint.replace('https://', '');
-    publicUrl = `https://${cleanEndpoint}/${accountId}:${bucketName}/${filePath}`;
-  } else {
-    // Fallback to the format you were using (but this might not work)
-    console.warn('CONTABO_ACCOUNT_ID not set. Using fallback URL format which may not work.');
-    const cleanEndpoint = endpoint.replace('https://', '');
-    publicUrl = `https://${bucketName}.${cleanEndpoint}/${filePath}`;
-  }
-
-  return publicUrl;
+// Generate local server URL for images
+const generateLocalImageUrl = (filePath) => {
+  const relativePath = filePath.replace(path.join(__dirname, '..'), '');
+  return `${process.env.BASE_URL || 'http://localhost:3000'}${relativePath.replace(/\\/g, '/')}`;
 };
 
-// Upload single file to Contabo S3 (updated to match logo controller)
-const uploadToContaboS3 = async (fileBuffer, fileName, contentType, folder = 'epaper/newspapers') => {
+// Save file to local server storage
+const saveToLocalStorage = async (fileBuffer, fileName, folder = 'newspapers') => {
   try {
-    // Validate s3Client before using (same as logo controller)
-    if (!s3Client || typeof s3Client.send !== 'function') {
-      throw new Error('S3 client is not properly initialized. Check your s3Client configuration.');
-    }
-
     const timestamp = Date.now();
-    const filePath = `${folder}/${timestamp}-${fileName}`;
-
-    const uploadParams = {
-      Bucket: process.env.CONTABO_BUCKET_NAME || "ezypress",
-      Key: filePath,
-      Body: fileBuffer,
-      ContentType: contentType,
-    };
-
-    console.log('Attempting to upload to S3 with params:', {
-      Bucket: uploadParams.Bucket,
-      Key: uploadParams.Key,
-      ContentType: uploadParams.ContentType
-    });
-
-    const uploadCommand = new PutObjectCommand(uploadParams);
-    const uploadResult = await s3Client.send(uploadCommand);
-    console.log('File uploaded to Contabo S3:', uploadResult);
-
-    // Generate public URL using the same method as logo controller
-    const publicUrl = generateContaboPublicUrl(filePath);
-    console.log('Generated public URL:', publicUrl);
-
+    const safeFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const filePath = path.join(UPLOADS_DIR, folder, `${timestamp}-${safeFileName}`);
+    
+    // Ensure directory exists
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) {
+      await mkdir(dir, { recursive: true });
+    }
+    
+    // Write file to disk
+    await fs.promises.writeFile(filePath, fileBuffer);
+    
+    // Generate public URL
+    const publicUrl = generateLocalImageUrl(filePath);
+    
+    console.log('File saved to local storage:', filePath);
+    
     return {
       publicUrl,
       filePath,
-      uploadResult
+      fileName: `${timestamp}-${safeFileName}`
     };
   } catch (error) {
-    console.error('Contabo S3 upload error:', error);
-    throw new Error(`Failed to upload to Contabo S3: ${error.message}`);
+    console.error('Local storage save error:', error);
+    throw new Error(`Failed to save file to local storage: ${error.message}`);
   }
 };
 
@@ -319,10 +291,10 @@ const convertPDFToImagesFallback = async (pdfPath, outputDir) => {
   }
 };
 
-// Upload Images to Contabo S3 with optimized batch processing (updated)
-const uploadToContabo = async (imagePaths) => {
+// Save Images to Local Storage with optimized batch processing
+const saveImagesToLocal = async (imagePaths) => {
   const urls = [];
-  const batchSize = 2; // Upload 2 images at a time for better parallel processing
+  const batchSize = 2; // Process 2 images at a time for better parallel processing
 
   // Process images in batches
   for (let i = 0; i < imagePaths.length; i += batchSize) {
@@ -330,19 +302,18 @@ const uploadToContabo = async (imagePaths) => {
     const batchPromises = batch.map(async (imagePath) => {
       const fileName = path.basename(imagePath);
       const fileBuffer = fs.readFileSync(imagePath);
-      const contentType = fileName.endsWith('.jpg') || fileName.endsWith('.jpeg') ? 'image/jpeg' : 'image/png';
 
       try {
-        const result = await uploadToContaboS3(fileBuffer, fileName, contentType, 'epaper/newspapers');
+        const result = await saveToLocalStorage(fileBuffer, fileName, 'newspapers');
 
-        // Clean up the image file after successful upload
+        // Clean up the temporary image file after successful save
         await unlink(imagePath).catch(err => console.warn(`Image cleanup error for ${fileName}:`, err));
 
-        console.log(`Successfully uploaded: ${fileName}`);
+        console.log(`Successfully saved: ${fileName}`);
         return result.publicUrl;
       } catch (error) {
-        console.error(`Upload failed for ${fileName}:`, error.message);
-        throw new Error(`Failed to upload ${fileName}: ${error.message}`);
+        console.error(`Save failed for ${fileName}:`, error.message);
+        throw new Error(`Failed to save ${fileName}: ${error.message}`);
       }
     });
 
@@ -350,7 +321,7 @@ const uploadToContabo = async (imagePaths) => {
     const batchUrls = await Promise.all(batchPromises);
     urls.push(...batchUrls);
 
-    console.log(`Uploaded batch ${i/batchSize + 1} of ${Math.ceil(imagePaths.length/batchSize)}`);
+    console.log(`Saved batch ${i/batchSize + 1} of ${Math.ceil(imagePaths.length/batchSize)}`);
   }
 
   return urls;
@@ -399,11 +370,11 @@ const uploadNewspaper = async (req, res) => {
     const conversionTime = (Date.now() - startTime) / 1000;
     console.log(`Generated ${imagePaths.length} images from PDF in ${conversionTime} seconds`);
 
-    console.log('Uploading images to Contabo S3...');
-    const uploadStartTime = Date.now();
-    const imageUrls = await uploadToContabo(imagePaths);
-    const uploadTime = (Date.now() - uploadStartTime) / 1000;
-    console.log(`Successfully uploaded ${imageUrls.length} images to Contabo S3 in ${uploadTime} seconds`);
+    console.log('Saving images to local storage...');
+    const saveStartTime = Date.now();
+    const imageUrls = await saveImagesToLocal(imagePaths);
+    const saveTime = (Date.now() - saveStartTime) / 1000;
+    console.log(`Successfully saved ${imageUrls.length} images to local storage in ${saveTime} seconds`);
 
     const newspaper = new NewspaperDetails({
       newspaperLinks: imageUrls,
@@ -679,18 +650,62 @@ const getNewspapersIncludeFuture = async (req, res) => {
 const deleteNewspaper = async(req, res) => {
   try {
     const {id} = req.params;
-    const deleteNewspaperDetails = await NewspaperDetails.findByIdAndDelete(id);
-    if(!deleteNewspaperDetails)
-    {
+    
+    // First find the newspaper to get the file paths
+    const newspaper = await NewspaperDetails.findById(id);
+    
+    if(!newspaper) {
       return res.status(404).send({
-      success: false,
-      message: `Newspaper details not found with id : ${id}`,
-      })
+        success: false,
+        message: `Newspaper details not found with id : ${id}`,
+      });
     }
+
+    // Delete all image files from server storage by extracting paths from URLs
+    if (newspaper.newspaperLinks && newspaper.newspaperLinks.length > 0) {
+      for (const imageUrl of newspaper.newspaperLinks) {
+        try {
+          // Parse the URL to extract the path
+          const urlObj = new URL(imageUrl);
+          const urlPath = urlObj.pathname;
+          
+          // Remove the base URL part to get the relative path
+          const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+          let relativePath = urlPath;
+          
+          if (urlPath.startsWith('/uploads/')) {
+            relativePath = urlPath.substring(1); // Remove leading slash
+          }
+          
+          const fullPath = path.join(__dirname, '..', relativePath);
+          
+          // Check if file exists and delete it
+          if (fs.existsSync(fullPath)) {
+            await unlink(fullPath);
+            console.log(`Deleted file: ${fullPath}`);
+          }
+        } catch (fileError) {
+          console.error(`Error deleting file from URL ${imageUrl}:`, fileError);
+          // Continue with other files even if one fails
+        }
+      }
+    }
+
+    // Now delete the database record
+    const deleteNewspaperDetails = await NewspaperDetails.findByIdAndDelete(id);
+    
+    if(!deleteNewspaperDetails) {
+      return res.status(404).send({
+        success: false,
+        message: `Newspaper details not found with id : ${id}`,
+      });
+    }
+
     res.status(200).send({
       success: true,
-      message: `Newspaper details deleted with id : ${id}`
-    })
+      message: `Newspaper details and associated files deleted with id : ${id}`
+    });
+
   } catch (error) {
     console.error('deleteNewspaper:', error);
     res.status(500).json({
@@ -725,10 +740,10 @@ const uploadImage = async (req, res) => {
     const fileBuffer = fs.readFileSync(tempFilePath);
     const fileName = path.basename(tempFilePath);
 
-    // Upload to Contabo S3 using the same method as logo controller
-    const result = await uploadToContaboS3(fileBuffer, fileName, req.file.mimetype, 'epaper/images');
+    // Save to local storage
+    const result = await saveToLocalStorage(fileBuffer, fileName, 'images');
 
-    // Delete temporary file after successful upload
+    // Delete temporary file after successful save
     await unlink(tempFilePath).catch(err =>
       console.error('Warning: Temp file deletion failed:', err)
     );
@@ -737,20 +752,16 @@ const uploadImage = async (req, res) => {
       success: true,
       message: 'Image uploaded successfully',
       url: result.publicUrl,
-      public_id: result.filePath,
+      filePath: result.filePath,
       data: {
         url: result.publicUrl,
-        filePath: result.filePath,
-        publicId: result.filePath
+        filePath: result.filePath
       }
     });
 
   } catch (error) {
-    // Enhanced error logging (same as logo controller)
     console.error('Image upload error details:', {
       message: error.message,
-      statusCode: error.$metadata?.httpStatusCode,
-      requestId: error.$metadata?.requestId,
       stack: error.stack
     });
 
@@ -764,8 +775,7 @@ const uploadImage = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error uploading image',
-      error: error.message,
-      details: error.$metadata?.httpStatusCode ? `HTTP ${error.$metadata.httpStatusCode}` : 'S3 Client Error'
+      error: error.message
     });
   }
 };
