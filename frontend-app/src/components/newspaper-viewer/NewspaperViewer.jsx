@@ -550,14 +550,7 @@ export default function NewspaperViewer() {
       if (!response.ok) throw new Error(`Upload failed with status: ${response.status}`);
 
       const data = await response.json();
-
-      // Extract file name from Supabase URL
-      const uploadedUrl = data.publicUrl;
-      const urlParts = uploadedUrl.split('/');
-      const imageFileName = urlParts[urlParts.length - 1];
-
-      // Return viewer route instead of raw file
-      return `${window.location.origin}/view-image?img=${imageFileName}`;
+      return `${window.location.origin}/view-image?img=${data?.fileName}`;
 
     } catch (uploadError) {
       console.error('Error uploading image, using local URL instead:', uploadError);

@@ -13,14 +13,20 @@ const uploadRoutes = require("./route/uploadRoutes.js")
 const { createDefaultAdmin } = require("./controller/userController.js")
 const setupNewspaperPublishing = require("./utils/cron.js");
 
-
-const port = process.env.PORT || 3000;
-
+// Load environment variables first
 dotenv.config();
+
+const port = process.env.PORT || 5002; // Changed default port to 5002
 
 const app = express();
 
-app.use(cors({ origin: ["https://epaper.thesiddipettimes.in"] }));
+app.use(cors({ 
+  origin: [
+    "http://localhost:3000", 
+    "http://localhost:5002",
+    "https://epaper.thesiddipettimes.in"
+  ] 
+}));
 
 app.use(express.json());
 
@@ -36,6 +42,7 @@ app.use("/image", uploadRoutes);
 
 app.listen(port, async () => {
   console.log(`Server Started on port ${port}`);
+  console.log(`Base URL: http://localhost:${port}`);
   await connectDB();
   await createDefaultAdmin();
   const currentDate = new Date();

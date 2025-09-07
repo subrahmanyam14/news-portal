@@ -26,7 +26,7 @@ const ImageMetaViewer = () => {
   useEffect(() => {
     const imageName = searchParams.get('img');
     if (imageName) {
-      const fullUrl = `https://epaper.thesiddipettimes.in/4b599cbe842d49b1b0e9e00bcab7a62d:sdpttimes/epaper/newspapers/${imageName}`;
+      const fullUrl = `${process.env.REACT_APP_BACKEND_URL}/uploads/${imageName}`;
       setImageUrl(fullUrl);
     }
   }, [searchParams]);
