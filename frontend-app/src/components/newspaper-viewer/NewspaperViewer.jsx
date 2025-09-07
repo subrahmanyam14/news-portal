@@ -489,7 +489,7 @@ export default function NewspaperViewer() {
 			const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}/logo`);
 			const logoImage = await loadImage(response?.data?.data?.url || 'https://sin1.contabostorage.com/4b599cbe842d49b1b0e9e00bcab7a62d:ezypress/epaper/logos/1752336513089-logo-1752336513081-tst_logo.jpg');
 
-			const logoHeight = Math.floor(clippedImage.height * 0.20); 
+			const logoHeight = Math.floor(clippedImage.height * 0.20);
 			const finalCanvas = document.createElement('canvas');
 			finalCanvas.width = clippedImage.width;
 			finalCanvas.height = logoHeight + clippedImage.height;
@@ -536,31 +536,31 @@ export default function NewspaperViewer() {
 
 
 	const uploadImage = async (blob) => {
-  try {
-    const formData = new FormData();
-    const fileName = `newspaper-clip-${selectedDate}.jpg`;
-    formData.append('file', blob, fileName);
+		try {
+			const formData = new FormData();
+			const fileName = `newspaper-clip-${selectedDate}.jpg`;
+			formData.append('file', blob, fileName);
 
-    try {
-      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/image/upload`, {
-        method: 'POST',
-        body: formData
-      });
+			try {
+				const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/image/upload`, {
+					method: 'POST',
+					body: formData
+				});
 
-      if (!response.ok) throw new Error(`Upload failed with status: ${response.status}`);
+				if (!response.ok) throw new Error(`Upload failed with status: ${response.status}`);
 
-      const data = await response.json();
-      return `${window.location.origin}/view-image?img=${data?.fileName}`;
+				const data = await response.json();
+				return `${window.location.origin}/view-image?img=${data?.fileName}`;
 
-    } catch (uploadError) {
-      console.error('Error uploading image, using local URL instead:', uploadError);
-      return URL.createObjectURL(blob); // fallback
-    }
-  } catch (error) {
-    console.error('Error processing image for upload:', error);
-    throw error;
-  }
-};
+			} catch (uploadError) {
+				console.error('Error uploading image, using local URL instead:', uploadError);
+				return URL.createObjectURL(blob); // fallback
+			}
+		} catch (error) {
+			console.error('Error processing image for upload:', error);
+			throw error;
+		}
+	};
 
 
 	useEffect(() => {
